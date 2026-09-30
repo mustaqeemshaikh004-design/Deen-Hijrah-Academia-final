@@ -1,0 +1,6 @@
+{
+  "name": "Deen Hijrah Academia",
+  "description": "Sacred Knowledge & Modern Academic Portal featuring interactive course curricula, live Zoom sessions, orientation calendars, and student progress tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

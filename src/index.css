@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-canvas: #060E1A;
+    --bg-surface: #0A1829;
+    --bg-elevated: #0F233A;
+    --border-subtle: rgba(20, 184, 166, 0.16);
+    --border-hairline: rgba(255, 255, 255, 0.09);
+    --text-primary: #F1F7FA;
+    --text-secondary: #94B2C7;
+    --text-muted: #62829A;
+    --accent-turquoise: #14B8A6;
+    --accent-aqua: #06B6D4;
+    --accent-gold: #D4AF37;
+  }
+
+  html.light {
+    --bg-canvas: #F3F8FA;
+    --bg-surface: #FFFFFF;
+    --bg-elevated: #E6F1F5;
+    --border-subtle: rgba(13, 148, 136, 0.22);
+    --border-hairline: rgba(10, 24, 41, 0.1);
+    --text-primary: #071324;
+    --text-secondary: #335069;
+    --text-muted: #5C7A94;
+    --accent-turquoise: #0D9488;
+    --accent-aqua: #0891B2;
+    --accent-gold: #B48A1E;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    transition: background-color 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Cinzel', Georgia, serif;
+    text-wrap: balance;
+  }
+
+  .font-mono-tabular {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.academy-canvas {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+}
+
+.academy-surface {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-hairline);
+}
+
+.academy-elevated {
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+}
+
+.academy-text-secondary {
+  color: var(--text-secondary);
+}
+
+.academy-text-muted {
+  color: var(--text-muted);
+}
+
+.academy-divider {
+  border-color: var(--border-hairline);
+}
