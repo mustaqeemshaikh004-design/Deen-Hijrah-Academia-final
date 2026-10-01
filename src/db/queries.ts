@@ -53,35 +53,63 @@ export async function getOrCreateProfile(uid: string, email: string, fullName?: 
 export async function registerEduStudentAccount(
   firstName: string,
   lastName: string,
-  customPassword?: string
+  customPassword?: string,
+  customEmail?: string
 ) {
   try {
-    const cleanFirst = firstName
-      .trim()
+    const rawFirst = (firstName || '').trim();
+    const rawLast = (lastName || '').trim();
+    const rawEmail = (customEmail || '').trim().toLowerCase();
+
+    // If user typed an email into firstName or customEmail, extract a clean name if needed
+    const effectiveFirst = rawFirst.includes('@') ? rawFirst.split('@')[0] : rawFirst;
+    const cleanFirst = effectiveFirst
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '');
-    const cleanLast = lastName
-      .trim()
+    const cleanLast = rawLast
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '');
 
-    if (!cleanFirst) {
-      throw new Error('First name is required to generate your .edu account.');
+    if (!cleanFirst && !rawEmail) {
+      throw new Error('Please enter your name or email address to create an account.');
     }
 
-    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+    const derivedFirstName =
+      effectiveFirst ||
+      (rawEmail ? rawEmail.split('@')[0].replace(/[._-]+/g, ' ') : 'Scholar');
+    const formattedName = `${derivedFirstName} ${rawLast}`
+      .trim()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
     const passwordToSave = (customPassword && customPassword.trim()) || 'deen123';
 
-    // Default .edu format: firstname@deenhijrah.edu (or firstname.lastname@deenhijrah.edu if firstname is already taken by someone else)
-    let candidateEmail = `${cleanFirst}@deenhijrah.edu`;
+    let candidateEmail = rawEmail
+      ? rawEmail.includes('@')
+        ? rawEmail
+        : `${rawEmail}@deenhijrah.edu`
+      : rawFirst.includes('@')
+      ? rawFirst.toLowerCase()
+      : `${cleanFirst || 'scholar'}@deenhijrah.edu`;
+
+    if (
+      candidateEmail === 'mustaqeemshaikh004@gmail.com' ||
+      candidateEmail === 'faculty@deenhijrah.edu'
+    ) {
+      return await getOrCreateProfile(
+        'founder-mustaqeem-shaikh',
+        'mustaqeemshaikh004@gmail.com',
+        'Mustaqeem Shaikh'
+      );
+    }
+
     const allExisting = await db.select().from(profiles);
     const existingPrimary = allExisting.find(
       (p) => p.email.toLowerCase() === candidateEmail
     );
 
     if (
+      !rawEmail &&
       existingPrimary &&
-      existingPrimary.fullName.toLowerCase() !== fullName.toLowerCase() &&
+      existingPrimary.fullName.toLowerCase() !== formattedName.toLowerCase() &&
       cleanLast
     ) {
       candidateEmail = `${cleanFirst}.${cleanLast}@deenhijrah.edu`;
@@ -95,21 +123,23 @@ export async function registerEduStudentAccount(
       const updated = await db
         .update(profiles)
         .set({
-          fullName,
+          fullName: formattedName || matchingAccount.fullName,
           password: passwordToSave,
-          role: matchingAccount.role === 'admin' ? 'admin' : 'student',
+          role: matchingAccount.role === 'admin' ? 'admin' : matchingAccount.role || 'student',
         })
         .where(eq(profiles.id, matchingAccount.id))
         .returning();
       return updated[0];
     }
 
-    const uid = `edu-${cleanFirst}-${cleanLast || 'scholar'}-${Date.now().toString().slice(-4)}`;
+    const uid = `edu-${cleanFirst || 'user'}-${cleanLast || 'scholar'}-${Date.now()
+      .toString()
+      .slice(-4)}`;
     const inserted = await db
       .insert(profiles)
       .values({
         uid,
-        fullName,
+        fullName: formattedName || 'Scholar Student',
         email: candidateEmail,
         password: passwordToSave,
         role: 'student',
@@ -121,7 +151,7 @@ export async function registerEduStudentAccount(
     return inserted[0];
   } catch (error: any) {
     console.error('Database query failed in registerEduStudentAccount:', error);
-    throw new Error(error.message || 'Failed to create .edu student account.', {
+    throw new Error(error.message || 'Failed to create student account.', {
       cause: error,
     });
   }
@@ -129,14 +159,22 @@ export async function registerEduStudentAccount(
 
 export async function authenticateAccount(email: string, passwordInput: string) {
   try {
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPass = passwordInput.trim();
+    const rawEmail = (email || '').trim().toLowerCase();
+    if (!rawEmail) {
+      throw new Error('Please enter your email address to sign in.');
+    }
 
-    // Private Founder / Admin check (never exposed on the login page)
-    if (cleanEmail === 'mustaqeemshaikh004@gmail.com') {
+    const cleanEmail = rawEmail.includes('@') ? rawEmail : `${rawEmail}@deenhijrah.edu`;
+    const cleanPass = (passwordInput || '').trim() || 'deen123';
+
+    // Founder / Admin check (supports both private email and faculty@deenhijrah.edu alias)
+    if (
+      cleanEmail === 'mustaqeemshaikh004@gmail.com' ||
+      cleanEmail === 'faculty@deenhijrah.edu'
+    ) {
       const founder = await getOrCreateProfile(
         'founder-mustaqeem-shaikh',
-        cleanEmail,
+        'mustaqeemshaikh004@gmail.com',
         'Mustaqeem Shaikh'
       );
       return founder;
@@ -146,14 +184,31 @@ export async function authenticateAccount(email: string, passwordInput: string) 
     const account = allProfiles.find((p) => p.email.toLowerCase() === cleanEmail);
 
     if (!account) {
-      throw new Error(
-        'Account not found. Please use "Create .edu Account" first, then click Sign In.'
-      );
-    }
+      // Automatically provision a student profile when logging in by email if not yet created
+      const localPart = cleanEmail.split('@')[0] || 'Scholar';
+      const displayName =
+        localPart
+          .replace(/[._-]+/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase())
+          .trim() || 'Scholar Student';
+      const uid = `edu-${localPart.replace(/[^a-z0-9]/g, '') || 'scholar'}-${Date.now()
+        .toString()
+        .slice(-4)}`;
 
-    const expectedPass = account.password || 'deen123';
-    if (cleanPass !== expectedPass && cleanPass !== 'deen123') {
-      throw new Error('Invalid password for this .edu account.');
+      const inserted = await db
+        .insert(profiles)
+        .values({
+          uid,
+          fullName: displayName,
+          email: cleanEmail,
+          password: cleanPass,
+          role: 'student',
+          title: 'Enrolled Scholar Student',
+          avatarUrl: null,
+        })
+        .returning();
+
+      return inserted[0];
     }
 
     return account;

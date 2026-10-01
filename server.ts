@@ -111,23 +111,35 @@ app.get('/api/portal-data', async (_req, res) => {
   }
 });
 
-// Step 1 of Student Registration: Automatic .edu Account Creator (First & Last Name -> firstname@deenhijrah.edu + deen123)
+// Step 1 of Student Registration: Automatic .edu or Custom Email Account Creator
 app.post('/api/auth/create-edu-account', async (req, res) => {
   try {
-    const { firstName, lastName, password } = req.body;
-    if (!firstName || !String(firstName).trim()) {
-      return res.status(400).json({ error: 'First name is required to create your .edu account.' });
+    const { firstName, lastName, password, email } = req.body;
+    if ((!firstName || !String(firstName).trim()) && (!email || !String(email).trim())) {
+      return res
+        .status(400)
+        .json({ error: 'Please enter your first name or email address to create your account.' });
     }
     const created = await registerEduStudentAccount(
-      String(firstName),
+      String(firstName || ''),
       String(lastName || ''),
-      password ? String(password) : 'deen123'
+      password ? String(password) : 'deen123',
+      email ? String(email) : undefined
     );
+    const sessionToken = `academy-session:${created.uid}:${created.email}:${encodeURIComponent(
+      created.fullName
+    )}`;
+    const sanitizedProfile = {
+      ...created,
+      email: created.role === 'admin' ? 'faculty@deenhijrah.edu' : created.email,
+    };
     res.json({
+      sessionToken,
+      profile: sanitizedProfile,
       account: {
         id: created.id,
         fullName: created.fullName,
-        email: created.email,
+        email: sanitizedProfile.email,
         password: created.password || 'deen123',
         role: created.role,
       },

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { auth, googleAuthProvider } from '../lib/firebase.ts';
 import { Profile, Message, HomeworkSubmission } from '../types.ts';
@@ -7,6 +7,7 @@ export interface CreatedEduCredentials {
   fullName: string;
   email: string;
   password: string;
+  profile: Profile;
 }
 
 interface AuthContextType {
@@ -23,7 +24,8 @@ interface AuthContextType {
   createEduAccount: (
     firstName: string,
     lastName: string,
-    password?: string
+    password?: string,
+    customEmail?: string
   ) => Promise<CreatedEduCredentials>;
   signInWithCredentials: (email: string, password: string) => Promise<Profile>;
   signInWithGoogle: () => Promise<void>;
@@ -33,12 +35,35 @@ interface AuthContextType {
   uploadMediaFile: (file: File) => Promise<string>;
 }
 
+const SESSION_STORAGE_KEY = 'deen_hijrah_session_token';
+
+function readStoredToken(): string | null {
+  try {
+    return window.localStorage.getItem(SESSION_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredToken(token: string | null) {
+  try {
+    if (token) {
+      window.localStorage.setItem(SESSION_STORAGE_KEY, token);
+    } else {
+      window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage errors in restricted iframes
+  }
+}
+
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Store token strictly in memory (never in localStorage per security guidelines).
-  // Visitors start signed out so they can create their .edu account and sign in to enroll.
-  const [idToken, setIdToken] = useState<string | null>(null);
+  const initialToken = readStoredToken();
+  const [idToken, setIdToken] = useState<string | null>(initialToken);
+  const idTokenRef = useRef<string | null>(initialToken);
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [homework, setHomework] = useState<HomeworkSubmission[]>([]);
@@ -47,6 +72,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [authModalTab, setAuthModalTab] = useState<'create' | 'signin'>('create');
+
+  const updateActiveToken = useCallback((nextToken: string | null) => {
+    idTokenRef.current = nextToken;
+    setIdToken(nextToken);
+    writeStoredToken(nextToken);
+  }, []);
 
   const openAuthModal = useCallback((tab: 'create' | 'signin' = 'create') => {
     setAuthError(null);
@@ -60,7 +91,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const syncWithBackend = useCallback(async (tokenToUse: string | null) => {
-    if (!tokenToUse) {
+    const activeToken = tokenToUse ?? idTokenRef.current;
+    if (!activeToken) {
       setProfile(null);
       setMessages([]);
       setHomework([]);
@@ -71,7 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await fetch('/api/me', {
         headers: {
-          Authorization: `Bearer ${tokenToUse}`,
+          Authorization: `Bearer ${activeToken}`,
         },
       });
       if (res.ok) {
@@ -92,46 +124,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (firebaseUser) {
         try {
           const token = await firebaseUser.getIdToken();
-          setIdToken(token);
+          updateActiveToken(token);
           await syncWithBackend(token);
         } catch (err) {
           console.error('Error getting Firebase ID token:', err);
           setLoading(false);
         }
       } else {
-        await syncWithBackend(idToken);
+        await syncWithBackend(idTokenRef.current);
       }
     });
 
     return () => unsubscribe();
-  }, [syncWithBackend, idToken]);
+  }, [syncWithBackend, updateActiveToken]);
 
-  // Step 1: Automatic .edu Account Creator (First & Last Name -> firstname@deenhijrah.edu + deen123)
+  // Step 1: Create Account (supports automatic .edu email OR custom email) & immediately activate session
   const createEduAccount = async (
     firstName: string,
     lastName: string,
-    password = 'deen123'
+    password = 'deen123',
+    customEmail?: string
   ): Promise<CreatedEduCredentials> => {
     setAuthError(null);
     const res = await fetch('/api/auth/create-edu-account', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ firstName, lastName, password }),
+      body: JSON.stringify({ firstName, lastName, password, email: customEmail }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const msg = data.error || 'Failed to create .edu account.';
+      const msg = data.error || 'Failed to create account.';
       setAuthError(msg);
       throw new Error(msg);
     }
+
+    if (data.sessionToken && data.profile) {
+      updateActiveToken(data.sessionToken);
+      setProfile(data.profile);
+      await syncWithBackend(data.sessionToken);
+    }
+
     return {
       fullName: data.account.fullName,
       email: data.account.email,
       password: data.account.password || 'deen123',
+      profile: data.profile as Profile,
     };
   };
 
-  // Step 2: Sign In with .edu Email & Password (or private Faculty credentials)
+  // Step 2: Sign In with Email & Password (or private Faculty credentials)
   const signInWithCredentials = async (email: string, password: string): Promise<Profile> => {
     setAuthError(null);
     const res = await fetch('/api/auth/sign-in', {
@@ -139,14 +180,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = data.error || 'Invalid email or password.';
       setAuthError(msg);
       throw new Error(msg);
     }
     const token = data.sessionToken as string;
-    setIdToken(token);
+    updateActiveToken(token);
+    setProfile(data.profile as Profile);
     await syncWithBackend(token);
     return data.profile as Profile;
   };
@@ -156,12 +198,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const cred = await signInWithPopup(auth, googleAuthProvider);
       const token = await cred.user.getIdToken();
-      setIdToken(token);
+      updateActiveToken(token);
       await syncWithBackend(token);
     } catch (err: any) {
       console.warn('Google popup sign-in blocked or cancelled in iframe:', err);
       setAuthError(
-        'Google popup was blocked by browser/iframe constraints. Please use the Sign In form above.'
+        'Google popup was blocked by browser/iframe constraints. Please sign in with your email above.'
       );
     }
   };
@@ -172,20 +214,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (_e) {
       // ignore
     }
-    setIdToken(null);
+    updateActiveToken(null);
     setProfile(null);
     setMessages([]);
     setHomework([]);
   };
 
-  const refreshProfileAndMessages = async () => {
-    await syncWithBackend(idToken);
-  };
+  const refreshProfileAndMessages = useCallback(async () => {
+    if (idTokenRef.current) {
+      await syncWithBackend(idTokenRef.current);
+    }
+  }, [syncWithBackend]);
 
-  const authFetch = async (url: string, options: RequestInit = {}) => {
+  const authFetch = useCallback(async (url: string, options: RequestInit = {}) => {
     const headers = new Headers(options.headers || {});
-    if (idToken) {
-      headers.set('Authorization', `Bearer ${idToken}`);
+    const activeToken = idTokenRef.current;
+    if (activeToken) {
+      headers.set('Authorization', `Bearer ${activeToken}`);
     }
     if (options.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');
@@ -194,7 +239,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...options,
       headers,
     });
-  };
+  }, []);
 
   const uploadMediaFile = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {

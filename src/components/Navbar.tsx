@@ -47,9 +47,11 @@ export const Navbar: React.FC<NavbarProps> = ({
     logout,
   } = useAuth();
 
-  // Step 1: Create .edu Account Form State
+  // Step 1: Create Account Form State (supports custom email OR automatic .edu email)
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [createEmail, setCreateEmail] = useState('');
+  const [createPassword, setCreatePassword] = useState('deen123');
   const [creatingAccount, setCreatingAccount] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState<CreatedEduCredentials | null>(null);
 
@@ -74,21 +76,31 @@ export const Navbar: React.FC<NavbarProps> = ({
     setThemeMode(next);
   };
 
-  const previewEduEmail = `${
-    firstName.trim().toLowerCase().replace(/[^a-z0-9]/g, '') || 'firstname'
-  }@deenhijrah.edu`;
+  const previewEduEmail = createEmail.trim()
+    ? createEmail.trim().toLowerCase()
+    : `${
+        firstName.trim().toLowerCase().replace(/[^a-z0-9]/g, '') || 'firstname'
+      }@deenhijrah.edu`;
 
-  // Step 1 Handler: Create .edu Account -> Pre-fill Sign In -> Switch to Sign In Tab
+  // Handler 1: Create Account & Immediately Sign In
   const handleCreateEduAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firstName.trim()) return;
+    if (!firstName.trim() && !createEmail.trim()) return;
     setCreatingAccount(true);
     try {
-      const creds = await createEduAccount(firstName.trim(), lastName.trim(), 'deen123');
+      const creds = await createEduAccount(
+        firstName.trim(),
+        lastName.trim(),
+        createPassword.trim() || 'deen123',
+        createEmail.trim() || undefined
+      );
       setCreatedCredentials(creds);
       setSignInEmail(creds.email);
       setSignInPassword(creds.password);
-      setActiveModalTab('signin');
+      closeAuthModal();
+      if (onSignedInSuccess && creds.profile) {
+        onSignedInSuccess(creds.profile);
+      }
     } catch {
       // error is displayed via authError
     } finally {
@@ -96,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     }
   };
 
-  // Step 2 Handler: Sign In -> Now Can Enroll!
+  // Handler 2: Sign In by Email
   const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signInEmail.trim()) return;
@@ -344,7 +356,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
 
             {activeModalTab === 'create' ? (
-              /* STEP 1: AUTOMATIC .EDU ACCOUNT CREATOR */
+              /* STEP 1: CREATE ACCOUNT & IMMEDIATELY SIGN IN */
               <form onSubmit={handleCreateEduAccount} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -353,7 +365,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </label>
                     <input
                       type="text"
-                      required
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
                       placeholder="e.g. Ahmad"
@@ -362,11 +373,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                   <div>
                     <label className="block text-xs academy-text-secondary mb-1">
-                      Last Name *
+                      Last Name (Optional)
                     </label>
                     <input
                       type="text"
-                      required
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
                       placeholder="e.g. Mansoor"
@@ -375,20 +385,53 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-xs academy-text-secondary mb-1">
+                    Email Address (Optional — leave blank for automatic .edu email)
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-3.5 h-3.5 academy-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      inputMode="email"
+                      value={createEmail}
+                      onChange={(e) => setCreateEmail(e.target.value)}
+                      placeholder={previewEduEmail}
+                      className="w-full pl-8 pr-3 py-2 text-sm rounded-lg academy-elevated focus:outline-none focus:border-teal-400 font-mono-tabular"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs academy-text-secondary mb-1">Password</label>
+                  <div className="relative">
+                    <KeyRound className="w-3.5 h-3.5 academy-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="password"
+                      value={createPassword}
+                      onChange={(e) => setCreatePassword(e.target.value)}
+                      placeholder="deen123"
+                      className="w-full pl-8 pr-3 py-2 text-sm rounded-lg academy-elevated focus:outline-none focus:border-teal-400 font-mono-tabular"
+                    />
+                  </div>
+                </div>
+
                 {/* Live Automatic .edu Credential Generator Preview */}
                 <div className="p-3.5 rounded-lg academy-elevated border border-teal-500/30 space-y-1.5">
                   <div className="text-[11px] font-semibold uppercase tracking-wider text-teal-400">
-                    Automatic .edu Student Credentials Preview
+                    Account Credentials Preview
                   </div>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="academy-text-secondary">Generated .edu Email:</span>
+                    <span className="academy-text-secondary">Account Email:</span>
                     <span className="font-mono-tabular font-semibold text-white">
                       {previewEduEmail}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="academy-text-secondary">Default Password:</span>
-                    <span className="font-mono-tabular font-semibold text-teal-300">deen123</span>
+                    <span className="academy-text-secondary">Password:</span>
+                    <span className="font-mono-tabular font-semibold text-teal-300">
+                      {createPassword || 'deen123'}
+                    </span>
                   </div>
                 </div>
 
@@ -400,27 +443,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <UserPlus className="w-4 h-4" />
                   <span>
                     {creatingAccount
-                      ? 'Creating Your .edu Account...'
-                      : 'Create Account (Then Sign In)'}
+                      ? 'Creating Account & Signing In...'
+                      : 'Create Account & Sign In'}
                   </span>
                 </button>
               </form>
             ) : (
-              /* STEP 2: SIGN IN TO ENROLL */
+              /* STEP 2: SIGN IN BY EMAIL */
               <form onSubmit={handleSignInSubmit} className="space-y-4">
                 {createdCredentials && (
                   <div className="p-3.5 rounded-lg bg-teal-500/15 border border-teal-400/50 space-y-1.5">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-teal-300">
                       <CheckCircle2 className="w-4 h-4 shrink-0" />
-                      <span>Account Created for {createdCredentials.fullName}!</span>
+                      <span>Account Ready for {createdCredentials.fullName}!</span>
                     </div>
                     <div className="text-xs academy-text-secondary font-mono-tabular">
                       Email: <strong className="text-white">{createdCredentials.email}</strong> ·
                       Password: <strong className="text-teal-300">{createdCredentials.password}</strong>
-                    </div>
-                    <div className="text-[11px] text-teal-200">
-                      Click <strong>&ldquo;Sign In Now&rdquo;</strong> below to activate your session
-                      and enroll in courses!
                     </div>
                   </div>
                 )}
@@ -432,11 +471,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <div className="relative">
                     <Mail className="w-3.5 h-3.5 academy-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
-                      type="email"
+                      type="text"
+                      inputMode="email"
                       required
                       value={signInEmail}
                       onChange={(e) => setSignInEmail(e.target.value)}
-                      placeholder="firstname@deenhijrah.edu"
+                      placeholder="yourname@deenhijrah.edu or email"
                       className="w-full pl-8 pr-3 py-2 text-sm rounded-lg academy-elevated focus:outline-none focus:border-teal-400 font-mono-tabular"
                     />
                   </div>
