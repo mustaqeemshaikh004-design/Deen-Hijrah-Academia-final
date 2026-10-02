@@ -12,26 +12,81 @@ import {
   mediaUploads,
 } from './schema.ts';
 
-export async function getOrCreateProfile(uid: string, email: string, fullName?: string, avatarUrl?: string) {
+export async function getOrCreateProfile(
+  uid: string,
+  email: string,
+  fullName?: string,
+  avatarUrl?: string
+) {
   try {
+    const cleanEmail = (email || 'student@deenhijrah.edu').trim().toLowerCase();
     const isFounder =
-      email.toLowerCase() === 'mustaqeemshaikh004@gmail.com' ||
+      cleanEmail === 'mustaqeemshaikh004@gmail.com' ||
+      cleanEmail === 'faculty@deenhijrah.edu' ||
       uid === 'founder-mustaqeem-shaikh';
 
-    const existing = await db.select().from(profiles).where(eq(profiles.uid, uid));
-    if (existing.length > 0) {
-      return existing[0];
+    const allProfiles = await db.select().from(profiles);
+
+    if (isFounder) {
+      const existingFounder = allProfiles.find(
+        (p) =>
+          p.uid === 'founder-mustaqeem-shaikh' ||
+          p.email.trim().toLowerCase() === 'mustaqeemshaikh004@gmail.com' ||
+          p.role === 'admin'
+      );
+      if (existingFounder) {
+        return existingFounder;
+      }
+    }
+
+    const existing = allProfiles.find(
+      (p) => p.uid === uid || p.email.trim().toLowerCase() === cleanEmail
+    );
+    if (existing) {
+      if (
+        (fullName && (!existing.fullName || existing.fullName === 'Scholar Student')) ||
+        (avatarUrl && !existing.avatarUrl && existing.role !== 'admin')
+      ) {
+        const updated = await db
+          .update(profiles)
+          .set({
+            fullName:
+              fullName && (!existing.fullName || existing.fullName === 'Scholar Student')
+                ? fullName
+                : existing.fullName,
+            avatarUrl:
+              avatarUrl && !existing.avatarUrl && existing.role !== 'admin'
+                ? avatarUrl
+                : existing.avatarUrl,
+          })
+          .where(eq(profiles.id, existing.id))
+          .returning();
+        return updated[0] || existing;
+      }
+      return existing;
     }
 
     const defaultRole = isFounder ? 'admin' : 'student';
-    const defaultName = fullName || (isFounder ? 'Mustaqeem Shaikh' : email.split('@')[0]);
-    const defaultTitle = isFounder ? 'Principal Faculty & Founder' : 'Scholar Student';
+    const derivedNameFromEmail =
+      cleanEmail
+        .split('@')[0]
+        .replace(/[._-]+/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .trim() || 'Scholar Student';
+    const defaultName =
+      fullName?.trim() || (isFounder ? 'Mustaqeem Shaikh' : derivedNameFromEmail);
+    const defaultTitle = isFounder
+      ? 'Principal Faculty & Founder'
+      : 'Enrolled Scholar Student';
+    const effectiveUid = isFounder
+      ? 'founder-mustaqeem-shaikh'
+      : uid || `user-${Date.now().toString().slice(-6)}`;
 
     const inserted = await db
       .insert(profiles)
       .values({
-        uid,
-        email,
+        uid: effectiveUid,
+        email: isFounder ? 'mustaqeemshaikh004@gmail.com' : cleanEmail,
         fullName: defaultName,
         role: defaultRole,
         title: defaultTitle,
@@ -39,7 +94,7 @@ export async function getOrCreateProfile(uid: string, email: string, fullName?: 
       })
       .onConflictDoUpdate({
         target: profiles.uid,
-        set: { email },
+        set: { email: isFounder ? 'mustaqeemshaikh004@gmail.com' : cleanEmail },
       })
       .returning();
 

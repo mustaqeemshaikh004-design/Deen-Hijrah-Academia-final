@@ -16,6 +16,7 @@ import {
   Download,
   Globe,
   MessageSquarePlus,
+  Compass,
 } from 'lucide-react';
 import {
   Course,
@@ -29,6 +30,9 @@ import {
 } from '../types.ts';
 import { resolveThumbnailUrl, ACADEMY_ASSETS } from '../lib/assets.ts';
 import { InteractiveCalendar } from './InteractiveCalendar.tsx';
+import { PathOfKnowledgeRoadmap } from './PathOfKnowledgeRoadmap.tsx';
+import { CourseCompletionChart } from './CourseCompletionChart.tsx';
+import { AttendanceStreakCard } from './AttendanceStreakCard.tsx';
 import { GRADE_STATUS_META } from './CourseWatchView.tsx';
 import {
   convertClassTimeToRegion,
@@ -94,7 +98,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   onBrowseCourses,
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'homework' | 'feedback' | 'zoom' | 'calendar' | 'inbox'
+    'overview' | 'roadmap' | 'homework' | 'feedback' | 'zoom' | 'calendar' | 'inbox'
   >('overview');
   const [calendarCourseFilter, setCalendarCourseFilter] = useState<number | null>(null);
 
@@ -401,6 +405,18 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('roadmap')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+              activeTab === 'roadmap'
+                ? 'bg-teal-400 text-slate-950 font-semibold'
+                : 'academy-text-secondary hover:text-teal-300'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5" />
+            <span>Path of Knowledge</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('homework')}
             className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
               activeTab === 'homework'
@@ -465,6 +481,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
       </div>
 
+      {/* ATTENDANCE STREAK COUNTER & DAILY ISTIQAMAH CARD */}
+      <AttendanceStreakCard
+        studentId={profile?.id || profile?.uid || 'guest-seeker'}
+        studentName={profile?.fullName || 'Scholar'}
+        selectedTimezone={selectedTimezone}
+        onContinueCoursework={() => {
+          if (enrolledCourses.length > 0) {
+            onWatchCourse(enrolledCourses[0]);
+          } else {
+            onBrowseCourses();
+          }
+        }}
+      />
+
       {/* OVERALL COURSE PROGRESS SUMMARY BAR */}
       <div className="rounded-xl academy-surface p-5 border border-teal-500/30 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -505,6 +535,44 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           />
         </div>
       </div>
+
+      {/* VISUAL 'PATH OF KNOWLEDGE' PROGRESS ROADMAP + RECHARTS COMPLETION BAR CHART */}
+      {(activeTab === 'overview' || activeTab === 'roadmap') && (
+        <div className="space-y-8">
+          <CourseCompletionChart
+            courses={courses}
+            enrolledCourses={enrolledCourses}
+            enrollments={myEnrollments}
+            lessons={lessons}
+            onWatchCourse={onWatchCourse}
+            onEnrollCourse={onEnrollCourse}
+            onToggleLessonProgress={onToggleLessonProgress}
+          />
+
+          <PathOfKnowledgeRoadmap
+            courses={courses}
+            lessons={lessons}
+            enrollments={myEnrollments}
+            enrolledCourseIds={enrolledCourseIds}
+            events={events}
+            homework={homework}
+            selectedTimezone={selectedTimezone}
+            isAdmin={profile?.role === 'admin'}
+            onWatchCourse={onWatchCourse}
+            onEnrollCourse={onEnrollCourse}
+            onToggleLessonProgress={onToggleLessonProgress}
+            onOpenHomeworkForCourse={(courseId, lessonId) => {
+              setHwCourseId(courseId);
+              setHwLessonId(lessonId ? String(lessonId) : '');
+              setActiveTab('homework');
+            }}
+            onOpenCalendarForCourse={(courseId) => {
+              setCalendarCourseFilter(courseId);
+              setActiveTab('calendar');
+            }}
+          />
+        </div>
+      )}
 
       {/* TAB 1: OVERVIEW (Enrolled Courses + Course Progress + Upcoming Live Zoom Meetings Summary) */}
       {activeTab === 'overview' && (

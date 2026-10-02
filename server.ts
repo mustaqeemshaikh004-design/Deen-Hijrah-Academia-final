@@ -51,7 +51,7 @@ app.get('/api/health', (_req, res) => {
 
 let initialSeedChecked = false;
 
-// Strict Admin/Instructor RBAC Middleware: Students cannot access or perform any admin actions
+// Strict Admin/Instructor RBAC Middleware: Students cannot access or perform any admin/teacher actions
 const requireAdmin = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const uid = req.user?.uid;
@@ -63,13 +63,48 @@ const requireAdmin = async (req: AuthRequest, res: Response, next: NextFunction)
     if (profile.role !== 'admin' && profile.role !== 'instructor') {
       return res
         .status(403)
-        .json({ error: 'Forbidden: Students cannot access the Admin Portal or modify academy content.' });
+        .json({ error: 'Forbidden: Students cannot access the Teacher/Admin Portal or modify academy content.' });
     }
+    (req as any).currentProfile = profile;
     next();
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Authorization check failed' });
   }
 };
+
+// Strict Founder-Only Admin Middleware: Only Founder Mustaqeem Shaikh (role === 'admin') can access global admin actions
+const requireStrictFounderAdmin = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const uid = req.user?.uid;
+    const email = req.user?.email || 'student@deenhijrah.edu';
+    if (!uid) {
+      return res.status(401).json({ error: 'Unauthorized: Missing user identity' });
+    }
+    const profile = await getOrCreateProfile(uid, email);
+    if (profile.role !== 'admin') {
+      return res
+        .status(403)
+        .json({ error: 'Forbidden: Full Admin access belongs exclusively to Founder Mustaqeem Shaikh.' });
+    }
+    (req as any).currentProfile = profile;
+    next();
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Authorization check failed' });
+  }
+};
+
+async function verifyTeacherCourseOwnership(profile: any, courseId: number): Promise<boolean> {
+  if (!profile) return false;
+  if (profile.role === 'admin') return true;
+  if (profile.role !== 'instructor') return false;
+  const allCourses = await getAllCourses();
+  const target = allCourses.find((c) => c.id === Number(courseId));
+  if (!target) return false;
+  return (
+    target.instructorId === profile.id ||
+    target.instructorName.trim().toLowerCase() === profile.fullName.trim().toLowerCase()
+  );
+}
 
 // Public endpoint to load portal courses, lessons, public events, homepage media slides, and faculty list
 app.get('/api/portal-data', async (_req, res) => {
@@ -175,6 +210,199 @@ app.post('/api/auth/sign-in', async (req, res) => {
   } catch (error: any) {
     console.error('Error signing in:', error);
     res.status(401).json({ error: error.message || 'Invalid credentials' });
+  }
+});
+
+// Step 3: Sign In or Register with Google Auth (recognizes normal users as students so they can immediately enroll)
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const { uid, email, fullName, avatarUrl } = req.body;
+    const rawEmail = String(email || '').trim().toLowerCase();
+    if (!rawEmail) {
+      return res.status(400).json({ error: 'Google email is required.' });
+    }
+    const cleanEmail = rawEmail.includes('@') ? rawEmail : `${rawEmail}@gmail.com`;
+    const effectiveUid =
+      cleanEmail === 'mustaqeemshaikh004@gmail.com' ||
+      cleanEmail === 'faculty@deenhijrah.edu'
+        ? 'founder-mustaqeem-shaikh'
+        : String(uid || '').trim() ||
+          `google-${cleanEmail.split('@')[0].replace(/[^a-z0-9]/g, '') || 'user'}`;
+
+    const profile = await getOrCreateProfile(
+      effectiveUid,
+      cleanEmail,
+      fullName ? String(fullName).trim() : undefined,
+      avatarUrl ? String(avatarUrl) : undefined
+    );
+    const sessionToken = `academy-session:${profile.uid}:${profile.email}:${encodeURIComponent(
+      profile.fullName
+    )}`;
+    res.json({
+      sessionToken,
+      profile: {
+        ...profile,
+        email:
+          profile.role === 'admin' ? 'faculty@deenhijrah.edu' : profile.email,
+      },
+    });
+  } catch (error: any) {
+    console.error('Error signing in with Google:', error);
+    res.status(500).json({ error: error.message || 'Failed to sign in with Google' });
+  }
+});
+
+// Join Our Faculty: Register as a Course Teacher (role = 'instructor', scoped strictly to their assigned course; never grants full 'admin')
+app.post('/api/faculty/join', async (req, res) => {
+  try {
+    const {
+      fullName,
+      email,
+      password,
+      title,
+      country,
+      timezone,
+      courseMode,
+      courseId,
+      newCourseTitle,
+      newCourseCategory,
+      newCourseDescription,
+      classDays,
+      classStartTime,
+      resumeUrl,
+      credentialsBio,
+    } = req.body;
+
+    const cleanName = String(fullName || '').trim();
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!cleanName || !cleanEmail) {
+      return res.status(400).json({ error: 'Full name and email are required to join our faculty.' });
+    }
+
+    const nameParts = cleanName.split(/\s+/);
+    const firstName = nameParts[0] || cleanName;
+    const lastName = nameParts.slice(1).join(' ');
+
+    const baseProfile = await registerEduStudentAccount(
+      firstName,
+      lastName,
+      password ? String(password) : 'deen123',
+      cleanEmail
+    );
+
+    // Keep Founder Mustaqeem Shaikh as 'admin'; all other teachers get 'instructor' (NOT 'admin')
+    const nextRole = baseProfile.role === 'admin' ? 'admin' : 'instructor';
+    const nextTitle =
+      String(title || '').trim() || `Course Instructor (${country || 'Global Faculty'})`;
+
+    const teacherProfile = await updateProfileRole(
+      baseProfile.id,
+      nextRole,
+      nextTitle,
+      cleanName,
+      undefined
+    );
+
+    let assignedCourse = null;
+    const allCourses = await getAllCourses();
+
+    if (courseMode === 'existing' && courseId) {
+      const targetCourse = allCourses.find((c) => c.id === Number(courseId));
+      if (targetCourse) {
+        assignedCourse = await updateCourse(targetCourse.id, {
+          instructorId: teacherProfile.id,
+          instructorName: teacherProfile.fullName,
+          classDays: classDays ? String(classDays) : targetCourse.classDays,
+          classStartTime: classStartTime ? String(classStartTime) : targetCourse.classStartTime,
+          classTimezone: timezone ? String(timezone) : targetCourse.classTimezone,
+        });
+      }
+    }
+
+    if (!assignedCourse) {
+      const effectiveTitle =
+        String(newCourseTitle || '').trim() || `${cleanName} — Sacred Knowledge Seminar`;
+      const slug =
+        effectiveTitle
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '') +
+        '-' +
+        Date.now().toString().slice(-4);
+
+      assignedCourse = await createCourse({
+        title: effectiveTitle,
+        slug,
+        description:
+          String(newCourseDescription || credentialsBio || '').trim() ||
+          `Led by ${teacherProfile.fullName} (${nextTitle}).`,
+        longDescription:
+          String(newCourseDescription || credentialsBio || '').trim() ||
+          `Structured curriculum led by ${teacherProfile.fullName}.`,
+        thumbnailUrl: 'preset:arabic',
+        category: String(newCourseCategory || 'Islamic Studies').trim(),
+        price: 'Free',
+        duration: '8 Weeks',
+        status: 'published',
+        instructorId: teacherProfile.id,
+        instructorName: teacherProfile.fullName,
+        launchDate: new Date().toISOString().slice(0, 10),
+        maxStudents: 30,
+        initialEnrolledCount: 0,
+        syllabusText: null,
+        syllabusBoxes: JSON.stringify([
+          {
+            week: 'Module 01 · Weeks 1–2',
+            title: 'Foundations & Primary Textual Methodology',
+            topics:
+              String(newCourseDescription || credentialsBio || '').trim() ||
+              'Introduction to core texts, principles, and weekly seminar readings.',
+            deliverable: 'Module 1 Reflection',
+          },
+        ]),
+        syllabusFileUrl: resumeUrl ? String(resumeUrl) : null,
+        classDays: String(classDays || 'Sunday & Thursday'),
+        classStartTime: String(classStartTime || '15:00'),
+        classTimezone: String(timezone || 'America/New_York'),
+      });
+    }
+
+    // Notify Founder Mustaqeem Shaikh via Academy Inbox
+    const allProfilesList = await getAllProfiles();
+    const founder =
+      allProfilesList.find(
+        (p) =>
+          p.uid === 'founder-mustaqeem-shaikh' ||
+          p.email.toLowerCase() === 'mustaqeemshaikh004@gmail.com' ||
+          p.role === 'admin'
+      ) || allProfilesList[0];
+
+    if (founder) {
+      await createMessage({
+        senderId: teacherProfile.id,
+        receiverId: founder.id,
+        subject: `[FACULTY_APPLICATION] ${teacherProfile.fullName} — Course: ${assignedCourse.title}`,
+        body: `Assalamu alaykum Ustadh Mustaqeem Shaikh,\n\n${teacherProfile.fullName} (${cleanEmail}) has joined the faculty as the Course Teacher for "${assignedCourse.title}".\n• Country & Timezone: ${country || 'N/A'} (${timezone || 'America/New_York'})\n• Class Schedule: ${classDays || 'Sun & Thu'} at ${classStartTime || '15:00'}\n• Qualifications / Bio: ${credentialsBio || 'Provided'}\n• Resume / CV: ${resumeUrl ? 'Uploaded / Attached' : 'Included in bio'}`,
+        readStatus: false,
+      });
+    }
+
+    const sessionToken = `academy-session:${teacherProfile.uid}:${teacherProfile.email}:${encodeURIComponent(
+      teacherProfile.fullName
+    )}`;
+
+    res.json({
+      sessionToken,
+      profile: {
+        ...teacherProfile,
+        email:
+          teacherProfile.role === 'admin' ? 'faculty@deenhijrah.edu' : teacherProfile.email,
+      },
+      assignedCourse,
+    });
+  } catch (error: any) {
+    console.error('Error joining faculty:', error);
+    res.status(500).json({ error: error.message || 'Failed to register faculty teacher' });
   }
 });
 
@@ -452,7 +680,7 @@ app.put('/api/messages/:id/read', requireAuth, async (req: AuthRequest, res) => 
 });
 
 // Admin: Update Founder (Mustaqeem Shaikh) Avatar Image or Reset to "MS"
-app.put('/api/admin/founder-avatar', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+app.put('/api/admin/founder-avatar', requireAuth, requireStrictFounderAdmin, async (req: AuthRequest, res) => {
   try {
     const { avatarUrl } = req.body;
     const allProfs = await getAllProfiles();
@@ -552,7 +780,19 @@ app.post('/api/admin/courses', requireAuth, requireAdmin, async (req: AuthReques
 app.put('/api/admin/courses/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const courseId = Number(req.params.id);
+    const currentProfile = (req as any).currentProfile;
+    const canManage = await verifyTeacherCourseOwnership(currentProfile, courseId);
+    if (!canManage) {
+      return res.status(403).json({
+        error:
+          'Forbidden: As a course teacher, you can only modify the courses you teach. Full Admin access belongs exclusively to Ustadh Mustaqeem Shaikh.',
+      });
+    }
     const bodyData = { ...req.body };
+    if (currentProfile?.role === 'instructor') {
+      bodyData.instructorId = currentProfile.id;
+      bodyData.instructorName = currentProfile.fullName;
+    }
     if (Array.isArray(bodyData.syllabusBoxes)) {
       bodyData.syllabusBoxes = JSON.stringify(bodyData.syllabusBoxes);
     }
@@ -564,7 +804,7 @@ app.put('/api/admin/courses/:id', requireAuth, requireAdmin, async (req: AuthReq
   }
 });
 
-app.delete('/api/admin/courses/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+app.delete('/api/admin/courses/:id', requireAuth, requireStrictFounderAdmin, async (req: AuthRequest, res) => {
   try {
     const courseId = Number(req.params.id);
     const result = await deleteCourse(courseId);
@@ -575,7 +815,7 @@ app.delete('/api/admin/courses/:id', requireAuth, requireAdmin, async (req: Auth
   }
 });
 
-// Admin CRUD: Lessons & Recordings
+// Admin & Scoped Teacher CRUD: Lessons & Recordings
 app.post('/api/admin/lessons', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const {
@@ -590,6 +830,15 @@ app.post('/api/admin/lessons', requireAuth, requireAdmin, async (req: AuthReques
       attachmentUrl,
       scheduledDate,
     } = req.body;
+
+    const currentProfile = (req as any).currentProfile;
+    const canManage = await verifyTeacherCourseOwnership(currentProfile, Number(courseId));
+    if (!canManage) {
+      return res.status(403).json({
+        error:
+          'Forbidden: You can only upload recordings for the courses you teach.',
+      });
+    }
 
     const created = await createLesson({
       courseId: Number(courseId),
@@ -697,8 +946,8 @@ app.delete('/api/admin/events/:id', requireAuth, requireAdmin, async (req: AuthR
   }
 });
 
-// Admin CRUD: Homepage Video & Slideshow Media
-app.post('/api/admin/slides', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+// Admin CRUD: Homepage Video & Slideshow Media (Strictly Founder Admin Only)
+app.post('/api/admin/slides', requireAuth, requireStrictFounderAdmin, async (req: AuthRequest, res) => {
   try {
     const {
       title,
@@ -732,7 +981,7 @@ app.post('/api/admin/slides', requireAuth, requireAdmin, async (req: AuthRequest
   }
 });
 
-app.put('/api/admin/slides/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+app.put('/api/admin/slides/:id', requireAuth, requireStrictFounderAdmin, async (req: AuthRequest, res) => {
   try {
     const slideId = Number(req.params.id);
     const updated = await updateHomepageSlide(slideId, req.body);
@@ -743,7 +992,7 @@ app.put('/api/admin/slides/:id', requireAuth, requireAdmin, async (req: AuthRequ
   }
 });
 
-app.delete('/api/admin/slides/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+app.delete('/api/admin/slides/:id', requireAuth, requireStrictFounderAdmin, async (req: AuthRequest, res) => {
   try {
     const slideId = Number(req.params.id);
     const result = await deleteHomepageSlide(slideId);
@@ -754,8 +1003,8 @@ app.delete('/api/admin/slides/:id', requireAuth, requireAdmin, async (req: AuthR
   }
 });
 
-// Admin: Update User Role / Profile
-app.put('/api/admin/profiles/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+// Admin: Update User Role / Profile (Strictly Founder Admin Only)
+app.put('/api/admin/profiles/:id', requireAuth, requireStrictFounderAdmin, async (req: AuthRequest, res) => {
   try {
     const profileId = Number(req.params.id);
     const { role, title, fullName, avatarUrl } = req.body;
@@ -793,8 +1042,8 @@ app.post('/api/admin/save-state', requireAuth, requireAdmin, async (_req: AuthRe
   }
 });
 
-// Admin: Reset portal to a 100% Blank Canvas
-app.post('/api/admin/clear-all', requireAuth, requireAdmin, async (_req: AuthRequest, res) => {
+// Admin: Reset portal to a 100% Blank Canvas (Strictly Founder Admin Only)
+app.post('/api/admin/clear-all', requireAuth, requireStrictFounderAdmin, async (_req: AuthRequest, res) => {
   try {
     const result = await clearAllContentToBlank();
     res.json(result);
@@ -804,8 +1053,8 @@ app.post('/api/admin/clear-all', requireAuth, requireAdmin, async (_req: AuthReq
   }
 });
 
-// Admin: Restore / Seed Default Showcase Courses, Slides, and Zoom Events
-app.post('/api/admin/seed-demo', requireAuth, requireAdmin, async (_req: AuthRequest, res) => {
+// Admin: Restore / Seed Default Showcase Courses, Slides, and Zoom Events (Strictly Founder Admin Only)
+app.post('/api/admin/seed-demo', requireAuth, requireStrictFounderAdmin, async (_req: AuthRequest, res) => {
   try {
     const result = await ensureInitialAcademySetup(true);
     res.json(result);

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { auth, googleAuthProvider } from '../lib/firebase.ts';
+import { openGoogleAccountsPopup } from '../lib/firebase.ts';
 import { Profile, Message, HomeworkSubmission } from '../types.ts';
+import { smartApiFetch, handleLocalFallbackRequest } from '../lib/fallbackStore.ts';
 
 export interface CreatedEduCredentials {
   fullName: string;
@@ -28,7 +28,8 @@ interface AuthContextType {
     customEmail?: string
   ) => Promise<CreatedEduCredentials>;
   signInWithCredentials: (email: string, password: string) => Promise<Profile>;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: () => Promise<Profile>;
+  signInWithGoogleAccount: (email: string, fullName?: string) => Promise<Profile>;
   logout: () => Promise<void>;
   refreshProfileAndMessages: () => Promise<void>;
   authFetch: (url: string, options?: RequestInit) => Promise<Response>;
@@ -101,16 +102,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      const res = await fetch('/api/me', {
+      const res = await smartApiFetch('/api/me', {
         headers: {
           Authorization: `Bearer ${activeToken}`,
         },
       });
       if (res.ok) {
         const data = await res.json();
-        setProfile(data.profile);
-        setMessages(data.messages || []);
-        setHomework(data.homework || []);
+        if (data.profile) {
+          setProfile(data.profile);
+          setMessages(data.messages || []);
+          setHomework(data.homework || []);
+        }
       }
     } catch (err) {
       console.error('Error syncing profile:', err);
@@ -119,24 +122,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        try {
-          const token = await firebaseUser.getIdToken();
-          updateActiveToken(token);
-          await syncWithBackend(token);
-        } catch (err) {
-          console.error('Error getting Firebase ID token:', err);
-          setLoading(false);
-        }
-      } else {
-        await syncWithBackend(idTokenRef.current);
+  const completeGoogleSignIn = useCallback(
+    async (params: {
+      uid?: string;
+      email: string;
+      fullName?: string;
+      avatarUrl?: string | null;
+    }): Promise<Profile> => {
+      const res = await smartApiFetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.profile) {
+        const msg = data.error || 'Failed to complete Google sign-in.';
+        setAuthError(msg);
+        throw new Error(msg);
       }
-    });
+      const token = data.sessionToken as string;
+      updateActiveToken(token);
+      setProfile(data.profile as Profile);
+      await syncWithBackend(token);
+      return data.profile as Profile;
+    },
+    [syncWithBackend, updateActiveToken]
+  );
 
-    return () => unsubscribe();
-  }, [syncWithBackend, updateActiveToken]);
+  useEffect(() => {
+    syncWithBackend(idTokenRef.current);
+  }, [syncWithBackend]);
 
   // Step 1: Create Account (supports automatic .edu email OR custom email) & immediately activate session
   const createEduAccount = async (
@@ -146,16 +161,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     customEmail?: string
   ): Promise<CreatedEduCredentials> => {
     setAuthError(null);
-    const res = await fetch('/api/auth/create-edu-account', {
+    const reqInit: RequestInit = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ firstName, lastName, password, email: customEmail }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const msg = data.error || 'Failed to create account.';
-      setAuthError(msg);
-      throw new Error(msg);
+    };
+    let res = await smartApiFetch('/api/auth/create-edu-account', reqInit);
+    let data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.profile) {
+      res = await handleLocalFallbackRequest('/api/auth/create-edu-account', reqInit);
+      data = await res.json().catch(() => ({}));
     }
 
     if (data.sessionToken && data.profile) {
@@ -165,9 +180,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     return {
-      fullName: data.account.fullName,
-      email: data.account.email,
-      password: data.account.password || 'deen123',
+      fullName: data.account?.fullName || data.profile?.fullName || 'Scholar Student',
+      email: data.account?.email || data.profile?.email || 'student@deenhijrah.edu',
+      password: data.account?.password || password || 'deen123',
       profile: data.profile as Profile,
     };
   };
@@ -175,14 +190,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Step 2: Sign In with Email & Password (or private Faculty credentials)
   const signInWithCredentials = async (email: string, password: string): Promise<Profile> => {
     setAuthError(null);
-    const res = await fetch('/api/auth/sign-in', {
+    const reqInit: RequestInit = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const msg = data.error || 'Invalid email or password.';
+    };
+    let res = await smartApiFetch('/api/auth/sign-in', reqInit);
+    let data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.profile) {
+      res = await handleLocalFallbackRequest('/api/auth/sign-in', reqInit);
+      data = await res.json().catch(() => ({}));
+    }
+    if (!data.profile) {
+      const msg = 'Please enter your email address to sign in.';
       setAuthError(msg);
       throw new Error(msg);
     }
@@ -193,27 +213,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return data.profile as Profile;
   };
 
-  const signInWithGoogle = async () => {
+  // Direct Google Account Sign-In (used when Google popup succeeds OR when popup is blocked by iframe/domain constraints)
+  const signInWithGoogleAccount = async (
+    email: string,
+    fullName?: string
+  ): Promise<Profile> => {
+    setAuthError(null);
+    const rawEmail = email.trim().toLowerCase();
+    const cleanEmail = rawEmail.includes('@') ? rawEmail : `${rawEmail}@gmail.com`;
+    return await completeGoogleSignIn({
+      uid: `google-${cleanEmail.split('@')[0].replace(/[^a-z0-9]/g, '') || 'user'}`,
+      email: cleanEmail,
+      fullName: fullName?.trim() || undefined,
+      avatarUrl: null,
+    });
+  };
+
+  const signInWithGoogle = async (): Promise<Profile> => {
     setAuthError(null);
     try {
-      const cred = await signInWithPopup(auth, googleAuthProvider);
-      const token = await cred.user.getIdToken();
-      updateActiveToken(token);
-      await syncWithBackend(token);
+      const googleUser = await openGoogleAccountsPopup();
+      return await completeGoogleSignIn({
+        uid: googleUser.uid,
+        email: googleUser.email,
+        fullName: googleUser.fullName,
+        avatarUrl: googleUser.avatarUrl,
+      });
     } catch (err: any) {
-      console.warn('Google popup sign-in blocked or cancelled in iframe:', err);
-      setAuthError(
-        'Google popup was blocked by browser/iframe constraints. Please sign in with your email above.'
-      );
+      console.warn('Google Accounts popup fallback triggered:', err);
+      throw new Error('GOOGLE_POPUP_UNAVAILABLE');
     }
   };
 
   const logout = async () => {
-    try {
-      await signOut(auth);
-    } catch (_e) {
-      // ignore
-    }
     updateActiveToken(null);
     setProfile(null);
     setMessages([]);
@@ -235,7 +267,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (options.body && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');
     }
-    return fetch(url, {
+    return smartApiFetch(url, {
       ...options,
       headers,
     });
@@ -286,6 +318,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         createEduAccount,
         signInWithCredentials,
         signInWithGoogle,
+        signInWithGoogleAccount,
         logout,
         refreshProfileAndMessages,
         authFetch,

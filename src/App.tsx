@@ -29,6 +29,7 @@ import { InteractiveCalendar } from './components/InteractiveCalendar.tsx';
 import { CourseWatchView } from './components/CourseWatchView.tsx';
 import { StudentDashboard } from './components/StudentDashboard.tsx';
 import { AdminPortal, AdminModule } from './components/AdminPortal.tsx';
+import { FacultyPage } from './components/FacultyPage.tsx';
 import { AcademyLogo, SplashIntro } from './components/AcademyLogo.tsx';
 import { MovingBackground } from './components/MovingBackground.tsx';
 import {
@@ -44,6 +45,7 @@ import {
   convertClassTimeToRegion,
   getDetectedUserTimezone,
 } from './lib/timezone.ts';
+import { smartApiFetch } from './lib/fallbackStore.ts';
 
 const sectionRevealVariants = {
   hidden: { opacity: 0, y: 28 },
@@ -119,7 +121,7 @@ function AcademyPortalContent() {
 
   const loadPortalData = useCallback(async () => {
     try {
-      const res = await fetch('/api/portal-data');
+      const res = await smartApiFetch('/api/portal-data');
       if (res.ok) {
         const data = await res.json();
         setCourses(data.courses || []);
@@ -208,7 +210,7 @@ function AcademyPortalContent() {
   const handleEnrollCourse = async (courseId: number) => {
     if (!profile) {
       openAuthModal('create');
-      showToast('Create your .edu account first, then click Sign In to enroll!');
+      showToast('Sign in with Google or create an account to enroll in this course!');
       return;
     }
 
@@ -555,6 +557,55 @@ function AcademyPortalContent() {
                   onOpenAdminSchedule={() => {
                     setAdminInitialModule('zoom_calendar');
                     setActiveView('admin');
+                  }}
+                />
+              </motion.div>
+            ) : activeView === 'faculty' ? (
+              <motion.div
+                key="faculty-view"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <FacultyPage
+                  profile={profile}
+                  founderProfile={founderProfile || undefined}
+                  profiles={profiles}
+                  courses={courses}
+                  lessons={lessons}
+                  isAdmin={Boolean(isAdmin)}
+                  onWatchCourse={(course) => setWatchingCourse(course)}
+                  onOpenCalendar={() => {
+                    setWatchingCourse(null);
+                    setActiveView('calendar');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  onOpenDashboard={() => {
+                    setWatchingCourse(null);
+                    setActiveView('dashboard');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  onOpenTeacherStudio={() => {
+                    setWatchingCourse(null);
+                    setAdminInitialModule('lessons');
+                    setActiveView('admin');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  onUploadFile={uploadMediaFile}
+                  onFacultyJoined={async (sessionToken, updatedProfile) => {
+                    if (sessionToken) {
+                      try {
+                        localStorage.setItem('academy_session_token', sessionToken);
+                      } catch {}
+                    }
+                    await handleRefreshAll();
+                    showToast(
+                      `Mubarak! Welcome to Deen Hijrah Faculty, ${updatedProfile.fullName}. Your Teacher Studio is unlocked.`
+                    );
+                    setAdminInitialModule('lessons');
+                    setActiveView('admin');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                 />
               </motion.div>
@@ -1203,6 +1254,19 @@ function AcademyPortalContent() {
                       type="button"
                       onClick={() => {
                         setWatchingCourse(null);
+                        setActiveView('faculty');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="hover:text-teal-300"
+                    >
+                      Our Faculty &amp; Academic Council
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWatchingCourse(null);
                         setActiveView('calendar');
                       }}
                       className="hover:text-teal-300"
@@ -1222,7 +1286,22 @@ function AcademyPortalContent() {
                       Student Dashboard, Tutor Chat &amp; Homework
                     </button>
                   </li>
-                  {isAdmin && (
+                  {profile?.role === 'instructor' && (
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWatchingCourse(null);
+                          setAdminInitialModule('lessons');
+                          setActiveView('admin');
+                        }}
+                        className="hover:text-teal-300 text-teal-400 font-medium"
+                      >
+                        Teacher Studio (Upload Recordings)
+                      </button>
+                    </li>
+                  )}
+                  {profile?.role === 'admin' && (
                     <li>
                       <button
                         type="button"
@@ -1230,9 +1309,9 @@ function AcademyPortalContent() {
                           setWatchingCourse(null);
                           setActiveView('admin');
                         }}
-                        className="hover:text-teal-300"
+                        className="hover:text-teal-300 text-amber-300 font-medium"
                       >
-                        Faculty Admin Portal (/admin)
+                        Academy Admin Portal (/admin)
                       </button>
                     </li>
                   )}

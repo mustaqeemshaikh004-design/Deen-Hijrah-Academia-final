@@ -78,19 +78,57 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   onNavigateToStudentDashboard,
 }) => {
   const detectedTz = useMemo(() => getDetectedUserTimezone(), []);
-  const [activeModule, setActiveModule] = useState<AdminModule>(initialModule);
+  const isFullAdmin = profile?.role === 'admin';
+  const isInstructor = profile?.role === 'instructor';
+
+  // Strict Scoped Teacher Permissions: Teachers only see & manage their assigned courses
+  const managedCourses = useMemo(() => {
+    if (isFullAdmin) return courses;
+    if (isInstructor && profile) {
+      return courses.filter(
+        (c) =>
+          c.instructorId === profile.id ||
+          c.instructorName.trim().toLowerCase() === profile.fullName.trim().toLowerCase()
+      );
+    }
+    return [];
+  }, [courses, isFullAdmin, isInstructor, profile]);
+
+  const managedCourseIds = useMemo(() => managedCourses.map((c) => c.id), [managedCourses]);
+
+  const managedLessons = useMemo(() => {
+    if (isFullAdmin) return lessons;
+    return lessons.filter((l) => managedCourseIds.includes(l.courseId));
+  }, [lessons, isFullAdmin, managedCourseIds]);
+
+  const managedEvents = useMemo(() => {
+    if (isFullAdmin) return events;
+    return events.filter((ev) => ev.courseId && managedCourseIds.includes(ev.courseId));
+  }, [events, isFullAdmin, managedCourseIds]);
+
+  const managedHomework = useMemo(() => {
+    if (isFullAdmin) return homework;
+    return homework.filter((h) => managedCourseIds.includes(h.courseId));
+  }, [homework, isFullAdmin, managedCourseIds]);
+
+  const [activeModule, setActiveModule] = useState<AdminModule>(() => {
+    if (isInstructor && initialModule === 'courses') return 'lessons';
+    return initialModule;
+  });
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
   const [confirmClearBlank, setConfirmClearBlank] = useState(false);
   const [isSavingAll, setIsSavingAll] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>('Auto-saved to Cloud SQL');
 
-  // Course Form State (includes Syllabus Upload, Syllabus Boxes, Student Capacity Limit, and Weekly Class Schedule + Timezone)
+  // Course Form State
   const [editingCourseId, setEditingCourseId] = useState<number | null>(null);
   const [courseTitle, setCourseTitle] = useState('');
   const [courseCategory, setCourseCategory] = useState('Seerah & History');
   const [coursePrice, setCoursePrice] = useState('Free');
   const [courseDuration, setCourseDuration] = useState('12 Weeks');
-  const [courseInstructor, setCourseInstructor] = useState('Mustaqeem Shaikh');
+  const [courseInstructor, setCourseInstructor] = useState(() =>
+    isInstructor && profile ? profile.fullName : 'Mustaqeem Shaikh'
+  );
   const [courseLaunchDate, setCourseLaunchDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
@@ -119,9 +157,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [courseStatus, setCourseStatus] = useState<'published' | 'draft'>('published');
   const [confirmDeleteCourseId, setConfirmDeleteCourseId] = useState<number | null>(null);
 
-  // Lesson & Recording Form State (includes direct video upload & Orientation vs Enrolled Class toggle)
+  // Lesson & Recording Form State
   const [selectedLessonCourseId, setSelectedLessonCourseId] = useState<number>(
-    courses[0]?.id || 0
+    managedCourses[0]?.id || courses[0]?.id || 0
   );
   const [editingLessonId, setEditingLessonId] = useState<number | null>(null);
   const [lessonTitle, setLessonTitle] = useState('');
@@ -374,7 +412,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   };
 
   // Lesson CRUD Handlers
-  const activeCourseIdForLessons = selectedLessonCourseId || courses[0]?.id || 0;
+  const activeCourseIdForLessons =
+    selectedLessonCourseId ||
+    (isInstructor ? managedCourses[0]?.id : courses[0]?.id) ||
+    0;
   const filteredCourseLessons = lessons
     .filter((l) => l.courseId === activeCourseIdForLessons)
     .sort((a, b) => a.positionOrder - b.positionOrder || a.id - b.id);
@@ -510,15 +551,29 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto px-6 lg:px-10 py-8">
-      {/* Top Admin Control Bar with Blank Canvas Reset & Showcase Seed */}
+      {/* Top Admin / Teacher Studio Control Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 mb-6 border-b academy-divider">
         <div>
           <div className="text-xs font-medium text-teal-400">
-            Admin Portal (/admin) · Faculty Control Center · Principal Faculty: Mustaqeem Shaikh
+            {isFullAdmin
+              ? 'Admin Portal (/admin) · Faculty Control Center · Principal Faculty: Mustaqeem Shaikh'
+              : `Teacher Studio · Course Instructor Workspace · ${profile?.fullName || 'Faculty'}`}
           </div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold mt-1">
-            Academy Curriculum, Syllabi, Recordings &amp; Global Calendar Manager
+            {isFullAdmin
+              ? 'Academy Curriculum, Syllabi, Recordings & Global Calendar Manager'
+              : 'Course Recordings, Syllabi & Student Homework Workspace'}
           </h1>
+          {isInstructor && (
+            <p className="text-xs academy-text-secondary mt-1">
+              Scoped Teacher Access: You can upload lecture recordings, manage course syllabus modules,
+              schedule live Zoom seminars, and grade student submissions for your assigned courses (
+              <strong className="text-teal-300">
+                {managedCourses.map((c) => c.title).join(', ') || 'Assigned Course'}
+              </strong>
+              ). Full Academy Admin privileges remain exclusively with Founder Mustaqeem Shaikh.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
@@ -536,61 +591,71 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors whitespace-nowrap shadow-sm"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>{isSavingAll ? 'Saving Changes...' : 'Save All Changes'}</span>
+            <span>
+              {isSavingAll
+                ? 'Saving Changes...'
+                : isFullAdmin
+                ? 'Save All Changes'
+                : 'Save My Course Changes'}
+            </span>
           </button>
 
-          {!confirmClearBlank ? (
-            <button
-              type="button"
-              onClick={() => setConfirmClearBlank(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 transition-colors whitespace-nowrap"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Start Blank Canvas (Clear All Demo Content)</span>
-            </button>
-          ) : (
-            <div className="flex items-center gap-2 p-1.5 rounded-lg bg-rose-950/50 border border-rose-500/50">
-              <span className="text-xs text-rose-200 px-2">Clear all courses &amp; slides?</span>
+          {isFullAdmin && (
+            <>
+              {!confirmClearBlank ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmClearBlank(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 transition-colors whitespace-nowrap"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Start Blank Canvas (Clear All Demo Content)</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 p-1.5 rounded-lg bg-rose-950/50 border border-rose-500/50">
+                  <span className="text-xs text-rose-200 px-2">Clear all courses &amp; slides?</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const res = await authFetch('/api/admin/clear-all', { method: 'POST' });
+                      if (res.ok) {
+                        setConfirmClearBlank(false);
+                        await onRefreshData();
+                        showNotice(
+                          'Portal reset to a 100% Blank Canvas! Add your own courses, recordings & Zoom events below.'
+                        );
+                      }
+                    }}
+                    className="px-3 py-1 rounded text-xs font-semibold bg-rose-500 text-white hover:bg-rose-400 whitespace-nowrap"
+                  >
+                    Yes, Make Everything Blank
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClearBlank(false)}
+                    className="px-2.5 py-1 rounded text-xs text-slate-300 hover:bg-white/10"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={async () => {
-                  const res = await authFetch('/api/admin/clear-all', { method: 'POST' });
+                  const res = await authFetch('/api/admin/seed-demo', { method: 'POST' });
                   if (res.ok) {
-                    setConfirmClearBlank(false);
                     await onRefreshData();
-                    showNotice(
-                      'Portal reset to a 100% Blank Canvas! Add your own courses, recordings & Zoom events below.'
-                    );
+                    showNotice('Sample courses, syllabi, recordings, and Zoom sessions restored.');
                   }
                 }}
-                className="px-3 py-1 rounded text-xs font-semibold bg-rose-500 text-white hover:bg-rose-400 whitespace-nowrap"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400/50 transition-colors whitespace-nowrap"
               >
-                Yes, Make Everything Blank
+                <RotateCcw className="w-3.5 h-3.5 text-teal-400" />
+                <span>Restore Sample Showcase</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setConfirmClearBlank(false)}
-                className="px-2.5 py-1 rounded text-xs text-slate-300 hover:bg-white/10"
-              >
-                Cancel
-              </button>
-            </div>
+            </>
           )}
-
-          <button
-            type="button"
-            onClick={async () => {
-              const res = await authFetch('/api/admin/seed-demo', { method: 'POST' });
-              if (res.ok) {
-                await onRefreshData();
-                showNotice('Sample courses, syllabi, recordings, and Zoom sessions restored.');
-              }
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400/50 transition-colors whitespace-nowrap"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-teal-400" />
-            <span>Restore Sample Showcase</span>
-          </button>
         </div>
       </div>
 
@@ -607,54 +672,88 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         </div>
       )}
 
-      {/* Dedicated Sidebar Layout for /admin */}
+      {/* Dedicated Sidebar Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Sidebar Navigation (3 Columns) */}
         <aside className="lg:col-span-3 rounded-xl academy-surface p-4 space-y-1.5">
-          {[
-            {
-              id: 'courses',
-              label: 'Courses, Syllabus & Limits',
-              icon: BookOpen,
-              count: courses.length,
-            },
-            {
-              id: 'lessons',
-              label: 'Upload Recordings',
-              icon: Video,
-              count: lessons.length,
-            },
-            {
-              id: 'zoom_calendar',
-              label: 'Course Calendar & Timezones',
-              icon: Calendar,
-              count: events.length,
-            },
-            {
-              id: 'homework',
-              label: 'Student Homework',
-              icon: FileText,
-              count: homework.length,
-            },
-            {
-              id: 'homepage_media',
-              label: 'Homepage Video & Slides',
-              icon: Film,
-              count: slides.length,
-            },
-            {
-              id: 'inbox',
-              label: 'Tutor Chat & Inbox',
-              icon: Mail,
-              count: unreadMessagesCount,
-            },
-            {
-              id: 'users',
-              label: 'Faculty (MS) & Enrollments',
-              icon: Users,
-              count: profiles.length,
-            },
-          ].map((item) => {
+          {(isInstructor
+            ? [
+                {
+                  id: 'lessons',
+                  label: 'Upload Recordings',
+                  icon: Video,
+                  count: managedLessons.length,
+                },
+                {
+                  id: 'courses',
+                  label: 'My Courses & Syllabus',
+                  icon: BookOpen,
+                  count: managedCourses.length,
+                },
+                {
+                  id: 'zoom_calendar',
+                  label: 'Live Zoom & Schedule',
+                  icon: Calendar,
+                  count: managedEvents.length,
+                },
+                {
+                  id: 'homework',
+                  label: 'Grade Homework',
+                  icon: FileText,
+                  count: managedHomework.length,
+                },
+                {
+                  id: 'inbox',
+                  label: 'Tutor Chat & Inbox',
+                  icon: Mail,
+                  count: unreadMessagesCount,
+                },
+              ]
+            : [
+                {
+                  id: 'courses',
+                  label: 'Courses, Syllabus & Limits',
+                  icon: BookOpen,
+                  count: courses.length,
+                },
+                {
+                  id: 'lessons',
+                  label: 'Upload Recordings',
+                  icon: Video,
+                  count: lessons.length,
+                },
+                {
+                  id: 'zoom_calendar',
+                  label: 'Course Calendar & Timezones',
+                  icon: Calendar,
+                  count: events.length,
+                },
+                {
+                  id: 'homework',
+                  label: 'Student Homework',
+                  icon: FileText,
+                  count: homework.length,
+                },
+                {
+                  id: 'homepage_media',
+                  label: 'Homepage Video & Slides',
+                  icon: Film,
+                  count: slides.length,
+                },
+                {
+                  id: 'inbox',
+                  label: 'Tutor Chat & Inbox',
+                  icon: Mail,
+                  count: unreadMessagesCount,
+                },
+                {
+                  id: 'users',
+                  label: 'Faculty (MS) & Enrollments',
+                  icon: Users,
+                  count: profiles.length,
+                },
+              ]
+          ).map((item) => {
             const Icon = item.icon;
             const isActive = activeModule === item.id;
             return (
@@ -745,14 +844,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   </div>
                   <div>
                     <label className="block text-xs academy-text-secondary mb-1">
-                      Faculty Instructor Name
+                      Faculty Instructor Name {isInstructor && '(Assigned to your Profile)'}
                     </label>
                     <input
                       type="text"
-                      value={courseInstructor}
+                      disabled={isInstructor}
+                      value={isInstructor ? (profile.fullName || courseInstructor) : courseInstructor}
                       onChange={(e) => setCourseInstructor(e.target.value)}
                       placeholder="Mustaqeem Shaikh"
-                      className="w-full px-3 py-2 text-sm rounded-lg academy-elevated focus:outline-none focus:border-teal-400"
+                      className={`w-full px-3 py-2 text-sm rounded-lg academy-elevated focus:outline-none focus:border-teal-400 ${
+                        isInstructor ? 'opacity-80 cursor-not-allowed bg-slate-900/50' : ''
+                      }`}
                     />
                   </div>
                   <div className="grid grid-cols-3 gap-2">
@@ -1122,15 +1224,19 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               {/* Existing Courses Table */}
               <div className="rounded-xl academy-surface p-6 space-y-4">
                 <h3 className="font-display text-base font-bold">
-                  All Academy Courses ({courses.length})
+                  {isInstructor
+                    ? `My Assigned Courses (${managedCourses.length})`
+                    : `All Academy Courses (${courses.length})`}
                 </h3>
-                {courses.length === 0 ? (
+                {(isInstructor ? managedCourses : courses).length === 0 ? (
                   <p className="text-xs academy-text-secondary py-4">
-                    No courses currently in database. Use the form above to add your first course.
+                    {isInstructor
+                      ? 'No courses are currently assigned to your teacher profile.'
+                      : 'No courses currently in database. Use the form above to add your first course.'}
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    {courses.map((course) => {
+                    {(isInstructor ? managedCourses : courses).map((course) => {
                       const dbCount = enrollments.filter((e) => e.courseId === course.id).length;
                       const taken = dbCount + (course.initialEnrolledCount || 0);
                       const max = course.maxStudents || 25;
@@ -1215,32 +1321,34 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             >
                               <Edit3 className="w-3.5 h-3.5" />
                             </button>
-                            {confirmDeleteCourseId === course.id ? (
-                              <div className="flex items-center gap-1">
+                            {isFullAdmin && (
+                              confirmDeleteCourseId === course.id ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCourse(course.id)}
+                                    className="px-2.5 py-1 rounded text-xs font-semibold bg-rose-500 text-white"
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteCourseId(null)}
+                                    className="px-2 py-1 rounded text-xs academy-text-secondary"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
                                 <button
                                   type="button"
-                                  onClick={() => handleDeleteCourse(course.id)}
-                                  className="px-2.5 py-1 rounded text-xs font-semibold bg-rose-500 text-white"
+                                  onClick={() => setConfirmDeleteCourseId(course.id)}
+                                  className="p-2 rounded academy-surface text-rose-400 hover:bg-rose-500/10"
+                                  title="Delete Course"
                                 >
-                                  Confirm
+                                  <Trash2 className="w-3.5 h-3.5" />
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmDeleteCourseId(null)}
-                                  className="px-2 py-1 rounded text-xs academy-text-secondary"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteCourseId(course.id)}
-                                className="p-2 rounded academy-surface text-rose-400 hover:bg-rose-500/10"
-                                title="Delete Course"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              )
                             )}
                           </div>
                         </div>
@@ -1272,7 +1380,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     onChange={(e) => setSelectedLessonCourseId(Number(e.target.value))}
                     className="px-3 py-2 text-xs font-semibold rounded-lg academy-elevated focus:outline-none focus:border-teal-400"
                   >
-                    {courses.map((c) => (
+                    {(isInstructor ? managedCourses : courses).map((c) => (
                       <option key={c.id} value={c.id}>
                         Course: {c.title}
                       </option>
@@ -1280,9 +1388,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   </select>
                 </div>
 
-                {courses.length === 0 ? (
+                {(isInstructor ? managedCourses : courses).length === 0 ? (
                   <p className="text-xs academy-text-secondary py-4">
-                    Create a course first in the Course Manager tab before adding lesson recordings.
+                    {isInstructor
+                      ? 'No courses are currently assigned to your teacher profile. Join or request course assignment first.'
+                      : 'Create a course first in the Course Manager tab before adding lesson recordings.'}
                   </p>
                 ) : (
                   <form onSubmit={handleSaveLesson} className="space-y-4">
@@ -1653,8 +1763,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       onChange={(e) => setEventCourseId(e.target.value)}
                       className="w-full px-3 py-2 text-sm rounded-lg academy-elevated"
                     >
-                      <option value="">General Academy Orientation (All Courses)</option>
-                      {courses.map((c) => (
+                      {!isInstructor && (
+                        <option value="">General Academy Orientation (All Courses)</option>
+                      )}
+                      {(isInstructor ? managedCourses : courses).map((c) => (
                         <option key={c.id} value={String(c.id)}>
                           {c.title}
                         </option>
@@ -1823,12 +1935,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
               <div className="rounded-xl academy-surface p-6 space-y-4">
                 <h3 className="font-display text-base font-bold">
-                  Scheduled Course Calendar &amp; Zoom Sessions ({events.length})
+                  Scheduled Course Calendar &amp; Zoom Sessions (
+                  {(isInstructor ? managedEvents : events).length})
                 </h3>
-                <div className="space-y-2.5">
-                  {events.map((ev) => {
-                    const parentCourse = courses.find((c) => c.id === ev.courseId);
-                    return (
+                {(isInstructor ? managedEvents : events).length === 0 ? (
+                  <p className="text-xs academy-text-secondary py-4">
+                    {isInstructor
+                      ? 'No calendar sessions scheduled for your assigned courses yet.'
+                      : 'No calendar sessions scheduled yet.'}
+                  </p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {(isInstructor ? managedEvents : events).map((ev) => {
+                      const parentCourse = courses.find((c) => c.id === ev.courseId);
+                      return (
                       <div
                         key={ev.id}
                         className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg academy-elevated"
@@ -1893,16 +2013,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     );
                   })}
                 </div>
-              </div>
+              )}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* MODULE D: STUDENT HOMEWORK SUBMISSIONS & GRADING */}
+        {/* MODULE D: STUDENT HOMEWORK SUBMISSIONS & GRADING */}
           {activeModule === 'homework' && (
             <div className="rounded-xl academy-surface p-6 space-y-5">
               <div>
                 <h2 className="font-display text-lg font-bold text-teal-400">
-                  Student Homework Submissions ({homework.length})
+                  Student Homework Submissions ({(isInstructor ? managedHomework : homework).length})
                 </h2>
                 <p className="text-xs academy-text-secondary">
                   Review homework submitted by enrolled students, download their attached files, and
@@ -1910,13 +2031,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 </p>
               </div>
 
-              {homework.length === 0 ? (
+              {(isInstructor ? managedHomework : homework).length === 0 ? (
                 <div className="py-10 text-center text-xs academy-text-secondary">
-                  No student homework submissions received yet.
+                  {isInstructor
+                    ? 'No student homework submissions for your courses yet.'
+                    : 'No student homework submissions received yet.'}
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {homework.map((hw) => {
+                  {(isInstructor ? managedHomework : homework).map((hw) => {
                     const courseObj = courses.find((c) => c.id === hw.courseId);
                     const currentInput = gradingInputs[hw.id] || {
                       status: hw.status || 'graded',
