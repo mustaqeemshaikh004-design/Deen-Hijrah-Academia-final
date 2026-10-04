@@ -17,7 +17,9 @@ import {
   Globe,
   MessageSquarePlus,
   Compass,
+  Sparkles,
 } from 'lucide-react';
+import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
 import {
   Course,
   Enrollment,
@@ -148,6 +150,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   // Tutor Feedback & Grade Status Editor State inside Homework Component
   const [openTutorEditorId, setOpenTutorEditorId] = useState<number | null>(null);
+  const [activePdfModal, setActivePdfModal] = useState<{ url: string; title: string } | null>(
+    null
+  );
   const [tutorFeedbackDrafts, setTutorFeedbackDrafts] = useState<
     Record<number, { status: HomeworkGradeStatus; grade: string; feedback: string }>
   >({});
@@ -1146,15 +1151,31 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         </p>
 
                         {hw.attachmentUrl && (
-                          <a
-                            href={hw.attachmentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs text-teal-400 hover:underline"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Download Submitted Homework File</span>
-                          </a>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActivePdfModal({
+                                  url: hw.attachmentUrl!,
+                                  title: `${hw.studentName} — ${hw.title}`,
+                                })
+                              }
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors cursor-pointer"
+                            >
+                              <BookOpen className="w-3.5 h-3.5" />
+                              <span>Read in Animated Page Reader</span>
+                              <Sparkles className="w-3 h-3" />
+                            </button>
+                            <a
+                              href={hw.attachmentUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400 text-teal-300"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Download File</span>
+                            </a>
+                          </div>
                         )}
 
                         {/* Dedicated Faculty Feedback & Grade Status Section */}
@@ -1801,6 +1822,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             )}
           </div>
         </div>
+      )}
+      {/* Interactive Fullscreen Animated PDF Reader Modal */}
+      {activePdfModal && (
+        <AnimatedPdfViewer
+          url={activePdfModal.url}
+          title={activePdfModal.title}
+          onClose={() => setActivePdfModal(null)}
+          variant="modal"
+        />
       )}
     </div>
   );

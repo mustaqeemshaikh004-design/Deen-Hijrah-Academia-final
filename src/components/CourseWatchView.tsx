@@ -17,7 +17,10 @@ import {
   Send,
   Users,
   Globe,
+  Sparkles,
+  Eye,
 } from 'lucide-react';
+import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
 import {
   Course,
   Lesson,
@@ -215,6 +218,9 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
     'lecture' | 'syllabus' | 'calendar' | 'homework'
   >('lecture');
   const [updatingProgress, setUpdatingProgress] = useState(false);
+  const [activePdfModal, setActivePdfModal] = useState<{ url: string; title: string } | null>(
+    null
+  );
 
   // Homework Submission Form State
   const [hwTitle, setHwTitle] = useState('');
@@ -696,15 +702,31 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                   </h2>
                 </div>
                 {course.syllabusFileUrl && (
-                  <a
-                    href={course.syllabusFileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 whitespace-nowrap"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Download Uploaded Syllabus File</span>
-                  </a>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActivePdfModal({
+                          url: course.syllabusFileUrl!,
+                          title: `${course.title} — Official Syllabus Document`,
+                        })
+                      }
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 shadow-md transition-colors whitespace-nowrap cursor-pointer"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>Read Syllabus (Animated Page Reader)</span>
+                      <Sparkles className="w-3.5 h-3.5" />
+                    </button>
+                    <a
+                      href={course.syllabusFileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400 whitespace-nowrap"
+                    >
+                      <Download className="w-3.5 h-3.5 text-teal-400" />
+                      <span>Download File</span>
+                    </a>
+                  </div>
                 )}
               </div>
 
@@ -1042,15 +1064,31 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                           </p>
 
                           {hw.attachmentUrl && (
-                            <a
-                              href={hw.attachmentUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 text-xs text-teal-400 hover:underline"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              <span>View Attached Homework File</span>
-                            </a>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActivePdfModal({
+                                    url: hw.attachmentUrl!,
+                                    title: `${hw.studentName} — ${hw.title}`,
+                                  })
+                                }
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors cursor-pointer"
+                              >
+                                <BookOpen className="w-3.5 h-3.5" />
+                                <span>Read in Animated Page Reader</span>
+                                <Sparkles className="w-3 h-3" />
+                              </button>
+                              <a
+                                href={hw.attachmentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400 text-teal-300"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Download File</span>
+                              </a>
+                            </div>
                           )}
 
                           {/* Dedicated Faculty Feedback & Grade Status Section */}
@@ -1479,23 +1517,40 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
                           {canWatchCurrentLesson &&
                             getLessonDownloadableResources(currentLesson).map((res) => (
-                              <a
-                                key={res.id}
-                                href={res.url}
-                                download={res.downloadFilename}
-                                target={res.downloadFilename ? undefined : '_blank'}
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400/60 transition-colors whitespace-nowrap"
-                              >
-                                <ResourceFileTypeIcon type={res.type} size="sm" />
-                                <span className="font-mono-tabular font-semibold">{res.type}:</span>
-                                <span>{res.title}</span>
-                                {res.type === 'Link' ? (
-                                  <ExternalLink className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                                ) : (
-                                  <Download className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                              <div key={res.id} className="flex items-center gap-1.5">
+                                {(res.type === 'PDF' || res.url.includes('.pdf') || res.url.startsWith('data:') || res.url.startsWith('/api/media/')) && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setActivePdfModal({
+                                        url: res.url,
+                                        title: `${currentLesson.title} — ${res.title}`,
+                                      })
+                                    }
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors whitespace-nowrap cursor-pointer shadow-sm"
+                                  >
+                                    <BookOpen className="w-3.5 h-3.5" />
+                                    <span>Read Animated PDF</span>
+                                    <Sparkles className="w-3 h-3" />
+                                  </button>
                                 )}
-                              </a>
+                                <a
+                                  href={res.url}
+                                  download={res.downloadFilename}
+                                  target={res.downloadFilename ? undefined : '_blank'}
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400/60 transition-colors whitespace-nowrap"
+                                >
+                                  <ResourceFileTypeIcon type={res.type} size="sm" />
+                                  <span className="font-mono-tabular font-semibold">{res.type}:</span>
+                                  <span>{res.title}</span>
+                                  {res.type === 'Link' ? (
+                                    <ExternalLink className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                                  ) : (
+                                    <Download className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                                  )}
+                                </a>
+                              </div>
                             ))}
 
                           {isEnrolled && (
@@ -1814,6 +1869,15 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+      {/* Fullscreen Interactive Animated PDF Reader Modal */}
+      {activePdfModal && (
+        <AnimatedPdfViewer
+          url={activePdfModal.url}
+          title={activePdfModal.title}
+          onClose={() => setActivePdfModal(null)}
+          variant="modal"
+        />
+      )}
     </motion.div>
   );
 };

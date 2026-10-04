@@ -106,6 +106,19 @@ async function verifyTeacherCourseOwnership(profile: any, courseId: number): Pro
   );
 }
 
+let globalCalendarSettings = {
+  defaultTimezone: 'America/New_York',
+  defaultViewMode: 'expanded_month' as const,
+  defaultCategoryFilter: 'all',
+  defaultCourseFilter: 'all',
+  allowPublicZoom: true,
+  showWeekends: true,
+  announcementTitle: 'Academy Master Schedule & Global Converted Timezones',
+  announcementText: 'All class times, orientations, and live Zoom webinars automatically convert to your local region.',
+  updatedAt: new Date().toISOString(),
+  updatedBy: 'Academy Administration',
+};
+
 // Public endpoint to load portal courses, lessons, public events, homepage media slides, and faculty list
 app.get('/api/portal-data', async (_req, res) => {
   try {
@@ -139,10 +152,39 @@ app.get('/api/portal-data', async (_req, res) => {
       slides: slidesList,
       profiles: sanitizedProfiles,
       enrollments: enrollmentsList,
+      calendarSettings: globalCalendarSettings,
     });
   } catch (error: any) {
     console.error('Failed to load portal data:', error);
     res.status(500).json({ error: error.message || 'Failed to load portal data' });
+  }
+});
+
+// Academy Global Calendar Settings (Saved and synchronized for all students, visitors and admins)
+app.get('/api/calendar/settings', (_req, res) => {
+  res.json(globalCalendarSettings);
+});
+
+app.post('/api/calendar/settings', requireAuth, requireAdmin, (req: AuthRequest, res) => {
+  try {
+    const currentProfile = (req as any).currentProfile;
+    const body = req.body || {};
+    globalCalendarSettings = {
+      defaultTimezone: body.defaultTimezone ? String(body.defaultTimezone) : globalCalendarSettings.defaultTimezone,
+      defaultViewMode: body.defaultViewMode || globalCalendarSettings.defaultViewMode,
+      defaultCategoryFilter: body.defaultCategoryFilter || globalCalendarSettings.defaultCategoryFilter,
+      defaultCourseFilter: body.defaultCourseFilter || globalCalendarSettings.defaultCourseFilter,
+      allowPublicZoom: body.allowPublicZoom !== undefined ? Boolean(body.allowPublicZoom) : globalCalendarSettings.allowPublicZoom,
+      showWeekends: body.showWeekends !== undefined ? Boolean(body.showWeekends) : globalCalendarSettings.showWeekends,
+      announcementTitle: body.announcementTitle !== undefined ? String(body.announcementTitle) : globalCalendarSettings.announcementTitle,
+      announcementText: body.announcementText !== undefined ? String(body.announcementText) : globalCalendarSettings.announcementText,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentProfile?.fullName || 'Academy Administration',
+    };
+    res.json(globalCalendarSettings);
+  } catch (error: any) {
+    console.error('Failed to save calendar settings:', error);
+    res.status(500).json({ error: error.message || 'Failed to save calendar settings' });
   }
 });
 
@@ -712,6 +754,9 @@ app.put('/api/admin/founder-avatar', requireAuth, requireStrictFounderAdmin, asy
 // Admin CRUD: Courses
 app.post('/api/admin/courses', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
   try {
+    const currentProfile = (req as any).currentProfile;
+    const isInstructor = currentProfile?.role === 'instructor';
+
     const {
       title,
       slug,
@@ -735,31 +780,62 @@ app.post('/api/admin/courses', requireAuth, requireAdmin, async (req: AuthReques
       classTimezone,
     } = req.body;
 
+    const courseTitle = String(title || '').trim();
+    if (!courseTitle) {
+      return res.status(400).json({ error: 'Course title is required' });
+    }
+
     const cleanSlug =
       slug ||
-      String(title)
+      courseTitle
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '') +
         '-' +
-        Date.now().toString().slice(-4);
+        Date.now().toString().slice(-4) +
+        '-' +
+        Math.random().toString(36).substring(2, 6);
+
+    // Resolve instructor attribution
+    let assignedInstructorId: number | null = null;
+    let assignedInstructorName = 'Mustaqeem Shaikh';
+
+    if (isInstructor && currentProfile) {
+      assignedInstructorId = currentProfile.id;
+      assignedInstructorName = currentProfile.fullName;
+    } else if (instructorId) {
+      // Validate that instructorId exists in profiles to avoid FK violations
+      const allProfs = await getAllProfiles();
+      const matched = allProfs.find((p) => p.id === Number(instructorId));
+      if (matched) {
+        assignedInstructorId = matched.id;
+        assignedInstructorName = matched.fullName;
+      }
+    }
+
+    if (instructorName && !isInstructor) {
+      assignedInstructorName = String(instructorName).trim() || assignedInstructorName;
+    }
+
+    const safeDesc = String(description || '').trim() || `${courseTitle} — Sacred Knowledge Program at Deen Hijrah Academia.`;
+    const safeLongDesc = String(longDescription || '').trim() || safeDesc;
 
     const created = await createCourse({
-      title: String(title),
+      title: courseTitle,
       slug: cleanSlug,
-      description: String(description || ''),
-      longDescription: String(longDescription || description || ''),
+      description: safeDesc,
+      longDescription: safeLongDesc,
       thumbnailUrl: String(thumbnailUrl || 'preset:seerah'),
       category: String(category || 'Islamic Studies'),
       price: String(price || 'Free'),
       duration: String(duration || '8 Weeks'),
       status: status === 'draft' ? 'draft' : 'published',
-      instructorId: instructorId ? Number(instructorId) : null,
-      instructorName: String(instructorName || 'Mustaqeem Shaikh'),
+      instructorId: assignedInstructorId,
+      instructorName: assignedInstructorName,
       launchDate: launchDate ? String(launchDate) : null,
-      maxStudents: maxStudents !== undefined ? Number(maxStudents) : 25,
+      maxStudents: maxStudents !== undefined ? Math.max(1, Number(maxStudents)) : 25,
       initialEnrolledCount:
-        initialEnrolledCount !== undefined ? Number(initialEnrolledCount) : 0,
+        initialEnrolledCount !== undefined ? Math.max(0, Number(initialEnrolledCount)) : 0,
       syllabusText: syllabusText ? String(syllabusText) : null,
       syllabusBoxes:
         typeof syllabusBoxes === 'string'

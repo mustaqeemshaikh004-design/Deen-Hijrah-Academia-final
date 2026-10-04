@@ -39,6 +39,7 @@ import {
   HomepageSlide,
   Profile,
   Enrollment,
+  CalendarSettings,
 } from './types.ts';
 import { resolveThumbnailUrl, ACADEMY_ASSETS } from './lib/assets.ts';
 import {
@@ -102,6 +103,7 @@ function AcademyPortalContent() {
   const [slides, setSlides] = useState<HomepageSlide[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [calendarSettings, setCalendarSettings] = useState<CalendarSettings | undefined>(undefined);
   const [loadingPortal, setLoadingPortal] = useState<boolean>(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [uploadingFacultyPhoto, setUploadingFacultyPhoto] = useState<boolean>(false);
@@ -130,6 +132,9 @@ function AcademyPortalContent() {
         setSlides(data.slides || []);
         setProfiles(data.profiles || []);
         setEnrollments(data.enrollments || []);
+        if (data.calendarSettings) {
+          setCalendarSettings(data.calendarSettings);
+        }
       }
     } catch (err) {
       console.error('Error loading portal data:', err);
@@ -137,6 +142,24 @@ function AcademyPortalContent() {
       setLoadingPortal(false);
     }
   }, []);
+
+  const handleUpdateCalendarSettings = async (newSettings: CalendarSettings) => {
+    try {
+      const res = await authFetch('/api/calendar/settings', {
+        method: 'POST',
+        body: JSON.stringify(newSettings),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        setCalendarSettings(saved);
+        showToast('Saved calendar options for everyone across the academy!');
+      } else {
+        showToast('Unable to save calendar settings globally.');
+      }
+    } catch (err: any) {
+      showToast(`Error: ${err.message || 'Could not save calendar settings'}`);
+    }
+  };
 
   useEffect(() => {
     loadPortalData();
@@ -541,7 +564,7 @@ function AcademyPortalContent() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -12 }}
                 transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                className="max-w-7xl mx-auto px-6 lg:px-10 py-10"
+                className="max-w-[1650px] w-full mx-auto px-4 sm:px-6 lg:px-10 py-8"
               >
                 <InteractiveCalendar
                   courses={courses}
@@ -549,6 +572,8 @@ function AcademyPortalContent() {
                   lessons={lessons}
                   enrolledCourseIds={enrolledCourseIds}
                   isAdmin={Boolean(isAdmin)}
+                  calendarSettings={calendarSettings}
+                  onUpdateCalendarSettings={handleUpdateCalendarSettings}
                   onEnrollCourse={handleEnrollCourse}
                   onOpenWatchCourse={(courseId) => {
                     const target = courses.find((c) => c.id === courseId);
@@ -1051,13 +1076,15 @@ function AcademyPortalContent() {
                     viewport={{ once: true, amount: 0.15 }}
                     className="border-t academy-divider py-12 lg:py-16"
                   >
-                    <div className="max-w-7xl mx-auto px-6 lg:px-10">
+                    <div className="max-w-[1650px] w-full mx-auto px-4 sm:px-6 lg:px-10">
                       <InteractiveCalendar
                         courses={courses}
                         events={events}
                         lessons={lessons}
                         enrolledCourseIds={enrolledCourseIds}
                         isAdmin={Boolean(isAdmin)}
+                        calendarSettings={calendarSettings}
+                        onUpdateCalendarSettings={handleUpdateCalendarSettings}
                         onEnrollCourse={handleEnrollCourse}
                         onOpenWatchCourse={(courseId) => {
                           const target = courses.find((c) => c.id === courseId);

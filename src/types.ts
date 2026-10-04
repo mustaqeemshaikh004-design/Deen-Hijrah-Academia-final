@@ -68,6 +68,19 @@ export interface Enrollment {
   enrolledAt?: string;
 }
 
+export interface CalendarSettings {
+  defaultTimezone: string;
+  defaultViewMode: 'expanded_month' | 'split_month' | 'week' | 'agenda';
+  defaultCategoryFilter: string;
+  defaultCourseFilter: string;
+  allowPublicZoom: boolean;
+  showWeekends: boolean;
+  announcementTitle?: string;
+  announcementText?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 export interface CourseEvent {
   id: number;
   courseId?: number | null;

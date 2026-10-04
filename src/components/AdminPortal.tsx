@@ -20,7 +20,11 @@ import {
   CheckCircle2,
   UserCheck,
   Download,
+  Sparkles,
+  AlertCircle,
+  Eye,
 } from 'lucide-react';
+import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
 import {
   Course,
   Lesson,
@@ -103,8 +107,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   const managedEvents = useMemo(() => {
     if (isFullAdmin) return events;
-    return events.filter((ev) => ev.courseId && managedCourseIds.includes(ev.courseId));
-  }, [events, isFullAdmin, managedCourseIds]);
+    return events.filter(
+      (ev) =>
+        !ev.courseId ||
+        managedCourseIds.includes(ev.courseId) ||
+        (ev.instructorName &&
+          profile?.fullName &&
+          ev.instructorName.trim().toLowerCase() === profile.fullName.trim().toLowerCase())
+    );
+  }, [events, isFullAdmin, managedCourseIds, profile]);
 
   const managedHomework = useMemo(() => {
     if (isFullAdmin) return homework;
@@ -144,7 +155,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [courseLongDesc, setCourseLongDesc] = useState('');
   const [courseSyllabusText, setCourseSyllabusText] = useState('');
   const [courseSyllabusFileUrl, setCourseSyllabusFileUrl] = useState('');
+  const [uploadedSyllabusFileObj, setUploadedSyllabusFileObj] = useState<File | null>(null);
+  const [uploadedSyllabusFileName, setUploadedSyllabusFileName] = useState<string>('');
   const [uploadingSyllabusFile, setUploadingSyllabusFile] = useState(false);
+  const [inlinePdfPreviewOpen, setInlinePdfPreviewOpen] = useState(true);
+  const [activePdfPreview, setActivePdfPreview] = useState<{
+    url?: string;
+    file?: File;
+    title: string;
+  } | null>(null);
+  const [isSavingCourse, setIsSavingCourse] = useState(false);
+  const [courseSaveError, setCourseSaveError] = useState<string | null>(null);
   const [courseSyllabusBoxes, setCourseSyllabusBoxes] = useState<SyllabusBox[]>([
     {
       week: 'Module 01 · Weeks 1–3',
@@ -207,6 +228,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [eventPasscode, setEventPasscode] = useState('HIJRAH26');
   const [eventThumb, setEventThumb] = useState('preset:orientation');
   const [eventInstructor, setEventInstructor] = useState('Mustaqeem Shaikh');
+  const [eventAudience, setEventAudience] = useState<'everyone' | 'enrolled'>('everyone');
 
   // Homepage Slide / Video Form State
   const [editingSlideId, setEditingSlideId] = useState<number | null>(null);
@@ -279,6 +301,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const handleSyllabusDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadedSyllabusFileObj(file);
+    setUploadedSyllabusFileName(file.name);
+    setInlinePdfPreviewOpen(true);
     setUploadingSyllabusFile(true);
     try {
       if (
@@ -293,7 +318,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       }
       const uploadedUrl = await onUploadFile(file);
       setCourseSyllabusFileUrl(uploadedUrl);
-      showNotice(`Syllabus file "${file.name}" uploaded!`);
+      showNotice(`Syllabus file "${file.name}" uploaded and animated pages generated!`);
     } finally {
       setUploadingSyllabusFile(false);
     }
@@ -342,51 +367,87 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // Course CRUD Handlers
   const handleSaveCourse = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!courseTitle.trim()) return;
-    const payload = {
-      title: courseTitle.trim(),
-      category: courseCategory.trim(),
-      price: coursePrice.trim(),
-      duration: courseDuration.trim(),
-      instructorName: courseInstructor.trim() || 'Mustaqeem Shaikh',
-      launchDate: courseLaunchDate || null,
-      maxStudents: Number(courseMaxStudents) || 25,
-      initialEnrolledCount: Number(courseInitialEnrolled) || 0,
-      classDays: courseClassDays.trim() || 'Saturday & Wednesday',
-      classStartTime: courseClassStartTime || '14:00',
-      classTimezone: courseClassTimezone || 'America/New_York',
-      description: courseShortDesc.trim(),
-      longDescription: courseLongDesc.trim() || courseShortDesc.trim(),
-      syllabusText: courseSyllabusText.trim() || null,
-      syllabusBoxes: JSON.stringify(courseSyllabusBoxes),
-      syllabusFileUrl: courseSyllabusFileUrl.trim() || null,
-      thumbnailUrl: courseThumb,
-      status: courseStatus,
-    };
+    setCourseSaveError(null);
 
-    const res = editingCourseId
-      ? await authFetch(`/api/admin/courses/${editingCourseId}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-        })
-      : await authFetch('/api/admin/courses', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
+    const titleClean = courseTitle.trim();
+    if (!titleClean) {
+      setCourseSaveError('Please enter a course title to create the course.');
+      showNotice('Please enter a course title.');
+      return;
+    }
 
-    if (res.ok) {
-      setEditingCourseId(null);
-      setCourseTitle('');
-      setCourseShortDesc('');
-      setCourseLongDesc('');
-      setCourseSyllabusText('');
-      setCourseSyllabusFileUrl('');
-      await onRefreshData();
-      showNotice(
-        editingCourseId
-          ? 'Course, syllabus boxes, student limit & timezone schedule updated.'
-          : 'New course created with syllabus boxes, student limit & global schedule.'
-      );
+    const safeCategory = courseCategory.trim() || 'Islamic Studies';
+    const safeShort =
+      courseShortDesc.trim() || `${titleClean} — Comprehensive sacred knowledge program.`;
+    const safeLong = courseLongDesc.trim() || safeShort;
+    const finalInstructorName = (
+      isInstructor && profile ? profile.fullName : courseInstructor
+    ).trim() || 'Mustaqeem Shaikh';
+
+    setIsSavingCourse(true);
+    try {
+      const payload = {
+        title: titleClean,
+        category: safeCategory,
+        price: coursePrice.trim() || 'Free',
+        duration: courseDuration.trim() || '8 Weeks',
+        instructorId: profile?.id || null,
+        instructorName: finalInstructorName,
+        launchDate: courseLaunchDate || null,
+        maxStudents: Number(courseMaxStudents) || 25,
+        initialEnrolledCount: Number(courseInitialEnrolled) || 0,
+        classDays: courseClassDays.trim() || 'Saturday & Wednesday',
+        classStartTime: courseClassStartTime || '14:00',
+        classTimezone: courseClassTimezone || 'America/New_York',
+        description: safeShort,
+        longDescription: safeLong,
+        syllabusText: courseSyllabusText.trim() || null,
+        syllabusBoxes: JSON.stringify(courseSyllabusBoxes),
+        syllabusFileUrl: courseSyllabusFileUrl.trim() || null,
+        thumbnailUrl: courseThumb,
+        status: courseStatus,
+      };
+
+      const res = editingCourseId
+        ? await authFetch(`/api/admin/courses/${editingCourseId}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+          })
+        : await authFetch('/api/admin/courses', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+
+      const resData = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        setEditingCourseId(null);
+        setCourseTitle('');
+        setCourseShortDesc('');
+        setCourseLongDesc('');
+        setCourseSyllabusText('');
+        setCourseSyllabusFileUrl('');
+        setUploadedSyllabusFileObj(null);
+        setUploadedSyllabusFileName('');
+        await onRefreshData();
+        showNotice(
+          editingCourseId
+            ? 'Course, syllabus boxes, student limit & timezone schedule updated.'
+            : 'New course created and published successfully!'
+        );
+      } else {
+        const errorMsg =
+          resData.error || 'Failed to create course. Please review the form fields.';
+        setCourseSaveError(errorMsg);
+        showNotice(errorMsg);
+      }
+    } catch (err: any) {
+      console.error('Error saving course:', err);
+      const msg = err.message || 'Network connection failed while creating course.';
+      setCourseSaveError(msg);
+      showNotice(msg);
+    } finally {
+      setIsSavingCourse(false);
     }
   };
 
@@ -489,7 +550,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       zoomPasscode: eventPasscode.trim() || null,
       thumbnailUrl: eventThumb,
       instructorName: eventInstructor.trim() || 'Mustaqeem Shaikh',
-      isPublic: eventType === 'orientation' || eventType === 'course_launch',
+      isPublic: eventAudience === 'everyone',
     };
 
     const res = editingEventId
@@ -807,6 +868,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         setCourseShortDesc('');
                         setCourseLongDesc('');
                         setCourseSyllabusText('');
+                        setCourseSaveError(null);
                       }}
                       className="text-xs academy-text-secondary hover:text-teal-400"
                     >
@@ -815,6 +877,22 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   )}
                 </div>
 
+                {courseSaveError && (
+                  <div className="p-3.5 rounded-lg bg-rose-500/15 border border-rose-500/40 text-xs text-rose-300 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                      <span>{courseSaveError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCourseSaveError(null)}
+                      className="text-rose-400 hover:text-rose-200"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs academy-text-secondary mb-1">
@@ -822,20 +900,21 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     </label>
                     <input
                       type="text"
-                      required
                       value={courseTitle}
-                      onChange={(e) => setCourseTitle(e.target.value)}
+                      onChange={(e) => {
+                        setCourseTitle(e.target.value);
+                        if (courseSaveError) setCourseSaveError(null);
+                      }}
                       placeholder="e.g. The Prophetic Seerah: Analytical Chronicles"
                       className="w-full px-3 py-2 text-sm rounded-lg academy-elevated focus:outline-none focus:border-teal-400"
                     />
                   </div>
                   <div>
                     <label className="block text-xs academy-text-secondary mb-1">
-                      Category *
+                      Category
                     </label>
                     <input
                       type="text"
-                      required
                       value={courseCategory}
                       onChange={(e) => setCourseCategory(e.target.value)}
                       placeholder="e.g. Seerah & History, Classical Arabic"
@@ -1035,14 +1114,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
                 <div>
                   <label className="block text-xs academy-text-secondary mb-1">
-                    Short Summary Description *
+                    Short Summary Description
                   </label>
                   <input
                     type="text"
-                    required
                     value={courseShortDesc}
                     onChange={(e) => setCourseShortDesc(e.target.value)}
-                    placeholder="Concise 1-2 sentence overview for the course card..."
+                    placeholder="Concise 1-2 sentence overview for the course card (auto-generated if left blank)..."
                     className="w-full px-3 py-2 text-sm rounded-lg academy-elevated"
                   />
                 </div>
@@ -1068,8 +1146,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         Course Syllabus Upload (Text Form, Document Upload &amp; Animated Boxes)
                       </h3>
                       <p className="text-xs academy-text-secondary">
-                        Upload a syllabus file (.txt, .md, .pdf) or type syllabus text and modular
-                        boxes that animate with smooth transitions when a student clicks the course.
+                        Upload a syllabus file (.txt, .md, .pdf) with animated page-turn transitions,
+                        or type syllabus text and modular boxes.
                       </p>
                     </div>
                     <label className="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 whitespace-nowrap">
@@ -1087,15 +1165,107 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   </div>
 
                   {courseSyllabusFileUrl && (
-                    <div className="text-xs text-teal-300 flex items-center justify-between p-2.5 rounded bg-teal-500/10 border border-teal-500/30">
-                      <span>Uploaded Syllabus Document Ready for Students</span>
-                      <button
-                        type="button"
-                        onClick={() => setCourseSyllabusFileUrl('')}
-                        className="text-rose-400 hover:underline"
-                      >
-                        Remove File
-                      </button>
+                    <div className="rounded-xl academy-surface p-4 border border-teal-500/30 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b academy-divider">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="p-2 rounded-lg bg-teal-500/15 border border-teal-500/30 text-teal-400 shrink-0">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-white truncate max-w-[220px] sm:max-w-xs">
+                                {uploadedSyllabusFileName || 'Course_Syllabus.pdf'}
+                              </span>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shrink-0">
+                                <Sparkles className="w-2.5 h-2.5" />
+                                Animated Pages Ready
+                              </span>
+                            </div>
+                            <span className="text-[11px] academy-text-secondary">
+                              Uploaded syllabus document will animate with page-turn transitions for students.
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActivePdfPreview({
+                                url: courseSyllabusFileUrl,
+                                file: uploadedSyllabusFileObj || undefined,
+                                title: `${courseTitle.trim() || 'Course'} — Syllabus Document`,
+                              })
+                            }
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Preview Animated Pages</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCourseSyllabusFileUrl('');
+                              setUploadedSyllabusFileObj(null);
+                              setUploadedSyllabusFileName('');
+                            }}
+                            className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors"
+                            title="Remove Document"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Embedded Animated Page Reader inside the form */}
+                      {inlinePdfPreviewOpen && (
+                        <div className="rounded-lg overflow-hidden border border-teal-500/20 bg-slate-950/80">
+                          <div className="p-2.5 bg-slate-900/90 border-b border-teal-500/20 flex items-center justify-between text-xs">
+                            <span className="font-semibold text-teal-300 flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5" />
+                              Interactive Animated Page Turn Preview
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActivePdfPreview({
+                                    url: courseSyllabusFileUrl,
+                                    file: uploadedSyllabusFileObj || undefined,
+                                    title: `${courseTitle.trim() || 'Course'} — Syllabus Document`,
+                                  })
+                                }
+                                className="text-[11px] text-teal-400 hover:underline flex items-center gap-1"
+                              >
+                                <span>Fullscreen Reader</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setInlinePdfPreviewOpen(false)}
+                                className="text-[11px] academy-text-muted hover:text-white"
+                              >
+                                Hide Preview
+                              </button>
+                            </div>
+                          </div>
+                          <AnimatedPdfViewer
+                            url={courseSyllabusFileUrl}
+                            file={uploadedSyllabusFileObj}
+                            title={`${courseTitle.trim() || 'Course'} — Syllabus`}
+                            variant="embedded"
+                          />
+                        </div>
+                      )}
+                      {!inlinePdfPreviewOpen && (
+                        <button
+                          type="button"
+                          onClick={() => setInlinePdfPreviewOpen(true)}
+                          className="text-xs text-teal-400 hover:underline flex items-center gap-1"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Show Animated Page Preview</span>
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -1208,17 +1378,49 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors whitespace-nowrap"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>
-                    {editingCourseId
-                      ? 'Save Course, Syllabus & Capacity Changes'
-                      : 'Create Course with Syllabus & Capacity Limit'}
-                  </span>
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={isSavingCourse}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap shadow-md cursor-pointer"
+                  >
+                    {isSavingCourse ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin shrink-0" />
+                        <span>Uploading Course &amp; Syllabus...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 shrink-0" />
+                        <span>
+                          {editingCourseId
+                            ? 'Save Course, Syllabus & Capacity Changes'
+                            : 'Create Course with Syllabus & Capacity Limit'}
+                        </span>
+                      </>
+                    )}
+                  </button>
+
+                  {editingCourseId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingCourseId(null);
+                        setCourseTitle('');
+                        setCourseShortDesc('');
+                        setCourseLongDesc('');
+                        setCourseSyllabusText('');
+                        setCourseSyllabusFileUrl('');
+                        setUploadedSyllabusFileObj(null);
+                        setUploadedSyllabusFileName('');
+                        setCourseSaveError(null);
+                      }}
+                      className="px-4 py-2.5 rounded-lg text-xs font-medium academy-elevated hover:bg-white/10"
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
+                </div>
               </form>
 
               {/* Existing Courses Table */}
@@ -1585,6 +1787,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                   setLessonAttachment(
                                     `${url}?name=${encodeURIComponent(file.name)}`
                                   );
+                                  showNotice(`Attachment "${file.name}" uploaded and animated pages generated!`);
                                 } finally {
                                   setUploadingLessonAttachment(false);
                                 }
@@ -1592,6 +1795,26 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             />
                           </label>
                         </div>
+                        {lessonAttachment && (
+                          <div className="flex items-center justify-between gap-2 mt-2 p-2 rounded bg-teal-500/10 border border-teal-500/20 text-xs">
+                            <span className="text-teal-300 truncate">
+                              Notes Attached: {lessonAttachment.split('?name=')[1] ? decodeURIComponent(lessonAttachment.split('?name=')[1]) : 'PDF Document'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setActivePdfPreview({
+                                  url: lessonAttachment.split('?name=')[0],
+                                  title: `${lessonTitle || 'Lesson'} — Notes Document`,
+                                })
+                              }
+                              className="inline-flex items-center gap-1 text-teal-400 hover:underline font-semibold shrink-0"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Preview Animated Pages</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1799,6 +2022,50 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       className="w-full px-3 py-2 text-sm rounded-lg academy-elevated font-mono-tabular"
                     />
                   </div>
+
+                  {/* Target Audience Option - Saved for Everyone vs Enrolled Only */}
+                  <div className="md:col-span-2">
+                    <label className="block text-xs text-teal-400 font-semibold mb-1.5">
+                      Session Audience &amp; Visibility (Saved on Calendar) *
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setEventAudience('everyone')}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          eventAudience === 'everyone'
+                            ? 'border-teal-400 bg-teal-400/20 text-teal-200 ring-1 ring-teal-400/40'
+                            : 'border-slate-800 academy-elevated text-slate-400'
+                        }`}
+                      >
+                        <div className="font-bold text-white flex items-center gap-2 text-xs">
+                          <Users className="w-3.5 h-3.5 text-teal-400" />
+                          <span>Open to Everyone (Public Master Calendar)</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-1">
+                          Visible to all academy students, visitors, and guest scholars. Anyone can view and join.
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setEventAudience('enrolled')}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          eventAudience === 'enrolled'
+                            ? 'border-teal-400 bg-teal-400/20 text-teal-200 ring-1 ring-teal-400/40'
+                            : 'border-slate-800 academy-elevated text-slate-400'
+                        }`}
+                      >
+                        <div className="font-bold text-white flex items-center gap-2 text-xs">
+                          <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Enrolled Cohort Students Only</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-1">
+                          Live Zoom join links and recordings reserved for registered students of this course.
+                        </div>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Instructor Time & Source Timezone Box */}
@@ -1990,6 +2257,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               setEventMeetingId(ev.zoomMeetingId || '');
                               setEventPasscode(ev.zoomPasscode || '');
                               setEventThumb(ev.thumbnailUrl || 'preset:orientation');
+                              setEventAudience(ev.isPublic ? 'everyone' : 'enrolled');
                             }}
                             className="p-1.5 rounded academy-surface hover:text-teal-400"
                           >
@@ -2693,6 +2961,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Interactive Fullscreen Animated PDF Reader Modal */}
+      {activePdfPreview && (
+        <AnimatedPdfViewer
+          url={activePdfPreview.url}
+          file={activePdfPreview.file}
+          title={activePdfPreview.title}
+          onClose={() => setActivePdfPreview(null)}
+          variant="modal"
+        />
+      )}
     </div>
   );
 };
