@@ -227,8 +227,9 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
                 autoPlay
                 loop
                 muted={isMuted}
+                preload="metadata"
                 playsInline
-                className="absolute inset-0 w-full h-full object-cover object-center"
+                className="absolute inset-0 w-full h-full object-cover object-center transform-gpu"
               />
             )}
 
@@ -683,6 +684,8 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
                         <img
                           src={resolveThumbnailUrl(slide.thumbnailUrl)}
                           alt={slide.title}
+                          loading="lazy"
+                          decoding="async"
                           referrerPolicy="no-referrer"
                           onError={(e) => {
                             (e.currentTarget as HTMLImageElement).src = ACADEMY_ASSETS.courseSeerah;

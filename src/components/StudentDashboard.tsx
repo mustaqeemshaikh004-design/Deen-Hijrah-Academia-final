@@ -359,7 +359,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   };
 
   return (
-    <div className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 py-6 md:py-8 space-y-6 md:space-y-8">
+    <div className="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 2xl:px-12 py-6 md:py-8 space-y-6 md:space-y-8">
       {/* Top Student Dashboard Header with Country Timezone Sync & Full-Width Tabs */}
       <div className="space-y-5 pb-6 border-b academy-divider">
         {/* Top Tier: Greeting, Scholar Status & Country Timezone */}
@@ -678,6 +678,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           <img
                             src={resolveThumbnailUrl(course.thumbnailUrl)}
                             alt={course.title}
+                            loading="lazy"
+                            decoding="async"
                             referrerPolicy="no-referrer"
                             onError={(e) => {
                               (e.currentTarget as HTMLImageElement).src =
@@ -941,6 +943,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           meeting.thumbnailUrl || parentCourse?.thumbnailUrl
                         )}
                         alt={meeting.title}
+                        loading="lazy"
+                        decoding="async"
                         referrerPolicy="no-referrer"
                         onError={(e) => {
                           (e.currentTarget as HTMLImageElement).src =
@@ -1603,6 +1607,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         meeting.thumbnailUrl || parentCourse?.thumbnailUrl
                       )}
                       alt={meeting.title}
+                      loading="lazy"
+                      decoding="async"
                       referrerPolicy="no-referrer"
                       onError={(e) => {
                         (e.currentTarget as HTMLImageElement).src =

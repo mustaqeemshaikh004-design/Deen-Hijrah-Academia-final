@@ -620,7 +620,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 lg:px-10 py-8">
+    <div className="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 2xl:px-12 py-6 md:py-8 space-y-6">
       {/* Top Admin / Teacher Studio Control Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 mb-6 border-b academy-divider">
         <div>
@@ -1677,6 +1677,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             <img
                               src={resolveThumbnailUrl(course.thumbnailUrl)}
                               alt={course.title}
+                              loading="lazy"
+                              decoding="async"
                               referrerPolicy="no-referrer"
                               onError={(e) => {
                                 (e.currentTarget as HTMLImageElement).src =
@@ -2111,6 +2113,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           <img
                             src={resolveThumbnailUrl(lesson.thumbnailUrl)}
                             alt={lesson.title}
+                            loading="lazy"
+                            decoding="async"
                             referrerPolicy="no-referrer"
                             onError={(e) => {
                               (e.currentTarget as HTMLImageElement).src =
@@ -2471,6 +2475,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           <img
                             src={resolveThumbnailUrl(ev.thumbnailUrl)}
                             alt={ev.title}
+                            loading="lazy"
+                            decoding="async"
                             referrerPolicy="no-referrer"
                             onError={(e) => {
                               (e.currentTarget as HTMLImageElement).src =
@@ -2852,6 +2858,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       <img
                         src={resolveThumbnailUrl(sl.thumbnailUrl)}
                         alt={sl.title}
+                        loading="lazy"
+                        decoding="async"
                         referrerPolicy="no-referrer"
                         onError={(e) => {
                           (e.currentTarget as HTMLImageElement).src =

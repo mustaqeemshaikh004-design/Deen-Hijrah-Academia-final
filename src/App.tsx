@@ -615,7 +615,7 @@ function AcademyPortalContent() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -12 }}
                 transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                className="max-w-[1650px] w-full mx-auto px-4 sm:px-6 lg:px-10 py-8"
+                className="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 2xl:px-12 py-6 md:py-8"
               >
                 <InteractiveCalendar
                   courses={courses}
@@ -711,7 +711,7 @@ function AcademyPortalContent() {
                         variants={sectionRevealVariants}
                         className="bg-gradient-to-r from-amber-400/10 via-amber-400/20 to-teal-400/10 border-b border-amber-400/30 px-6 py-2.5"
                       >
-                        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <div className="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
                           <div className="flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
                             <span className="font-bold text-amber-300 uppercase tracking-wider">
@@ -762,7 +762,7 @@ function AcademyPortalContent() {
                     variants={sectionRevealVariants}
                     className="border-b academy-divider academy-elevated"
                   >
-                    <div className="max-w-7xl mx-auto px-6 lg:px-10 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 2xl:px-12 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-teal-400">
                           Faculty Quick Controls (Ustadh Mustaqeem Shaikh):
@@ -871,7 +871,7 @@ function AcademyPortalContent() {
                 <motion.section
                   id="courses-section"
                   variants={sectionRevealVariants}
-                  className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 py-12 lg:py-16 space-y-8"
+                  className="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 2xl:px-12 py-10 lg:py-16 space-y-8"
                 >
                   <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 pb-6 border-b academy-divider">
                     <div>
@@ -956,7 +956,7 @@ function AcademyPortalContent() {
                       variants={gridContainerVariants}
                       initial="hidden"
                       animate={showSplash ? 'hidden' : 'visible'}
-                      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-6 lg:gap-8"
+                      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 gap-6 lg:gap-8"
                     >
                       {filteredCourses.map((course) => {
                         const isEnrolled = enrolledCourseIds.includes(course.id);
@@ -1003,6 +1003,8 @@ function AcademyPortalContent() {
                                 <img
                                   src={resolveThumbnailUrl(course.thumbnailUrl)}
                                   alt={course.title}
+                                  loading="lazy"
+                                  decoding="async"
                                   referrerPolicy="no-referrer"
                                   onError={(e) => {
                                     (e.currentTarget as HTMLImageElement).src =
@@ -1188,7 +1190,7 @@ function AcademyPortalContent() {
                     viewport={{ once: true, amount: 0.15 }}
                     className="border-t academy-divider py-12 lg:py-16"
                   >
-                    <div className="max-w-[1650px] w-full mx-auto px-4 sm:px-6 lg:px-10">
+                    <div className="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 2xl:px-12">
                       <InteractiveCalendar
                         courses={courses}
                         events={events}
@@ -1220,7 +1222,7 @@ function AcademyPortalContent() {
                     viewport={{ once: true, amount: 0.2 }}
                     className="border-t academy-divider py-12 lg:py-16"
                   >
-                    <div className="max-w-7xl mx-auto px-6 lg:px-10">
+                    <div className="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 2xl:px-12">
                       <div className="rounded-xl academy-surface p-8 lg:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center backdrop-blur-sm bg-opacity-90">
                         {/* Left 4 Columns: "MS" Monogram Emblem or Custom Uploaded Image */}
                         <div className="lg:col-span-4 flex flex-col items-center justify-center space-y-3">
@@ -1339,7 +1341,7 @@ function AcademyPortalContent() {
 
         {/* Clean Academic Footer with Logo Emblem */}
         <footer className="border-t academy-divider academy-surface mt-16 backdrop-blur-md bg-opacity-95">
-          <div className="max-w-7xl mx-auto px-6 lg:px-10 py-10">
+          <div className="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 2xl:px-12 py-10">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-8 pb-8 border-b academy-divider">
               <div className="md:col-span-5 space-y-3">
                 <div className="flex items-center gap-3">

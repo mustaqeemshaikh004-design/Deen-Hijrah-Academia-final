@@ -307,6 +307,8 @@ export const OpenEnrollmentHeroBanner: React.FC<OpenEnrollmentHeroBannerProps> =
                 <img
                   src={resolveThumbnailUrl(activeCourse.thumbnailUrl)}
                   alt={activeCourse.title}
+                  loading="lazy"
+                  decoding="async"
                   referrerPolicy="no-referrer"
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).src = ACADEMY_ASSETS.courseSeerah;

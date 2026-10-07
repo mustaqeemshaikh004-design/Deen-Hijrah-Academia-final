@@ -519,7 +519,11 @@ export const InteractiveCalendar: React.FC<InteractiveCalendarProps> = ({
   };
 
   return (
-    <div className={`space-y-6 ${isFullWidth ? 'w-full' : 'max-w-7xl mx-auto'}`}>
+    <div
+      className={`space-y-6 ${
+        isFullWidth ? 'w-full' : 'w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto'
+      }`}
+    >
       {/* Top Header & Announcement Banner */}
       {optAnnouncementTitle && (
         <div className="p-4 sm:p-5 rounded-2xl academy-elevated border border-teal-500/30 bg-gradient-to-r from-teal-950/40 via-slate-900 to-amber-950/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1152,6 +1156,8 @@ export const InteractiveCalendar: React.FC<InteractiveCalendarProps> = ({
                     <img
                       src={resolveThumbnailUrl(item.thumbnailUrl)}
                       alt={item.title}
+                      loading="lazy"
+                      decoding="async"
                       referrerPolicy="no-referrer"
                       onError={(e) => {
                         (e.currentTarget as HTMLImageElement).src = ACADEMY_ASSETS.orientationLive;
@@ -1462,6 +1468,8 @@ export const InteractiveCalendar: React.FC<InteractiveCalendarProps> = ({
           <img
             src={resolveThumbnailUrl(item.thumbnailUrl)}
             alt={item.title}
+            loading="lazy"
+            decoding="async"
             referrerPolicy="no-referrer"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).src = ACADEMY_ASSETS.orientationLive;

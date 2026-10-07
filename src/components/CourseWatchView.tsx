@@ -19,6 +19,9 @@ import {
   Globe,
   Sparkles,
   Eye,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
 } from 'lucide-react';
 import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
 import {
@@ -30,6 +33,7 @@ import {
   HomeworkSubmission,
   HomeworkGradeStatus,
   Message,
+  parseCourseTags,
 } from '../types.ts';
 import { resolveThumbnailUrl, ACADEMY_ASSETS } from '../lib/assets.ts';
 import { InteractiveCalendar } from './InteractiveCalendar.tsx';
@@ -214,6 +218,8 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(
     courseLessons[0]?.id || null
   );
+  const [isTheaterMode, setIsTheaterMode] = useState(false);
+  const [videoHasError, setVideoHasError] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<
     'lecture' | 'syllabus' | 'calendar' | 'homework'
   >('lecture');
@@ -536,12 +542,14 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
     }
   };
 
+  const courseTags = parseCourseTags(course);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      className="max-w-7xl mx-auto px-6 lg:px-10 py-8 space-y-6"
+      className="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 2xl:px-12 py-6 md:py-8 space-y-6"
     >
       {/* Top Breadcrumb, Course Capacity, Student Course Progress & Navigation Bar */}
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-5 border-b academy-divider">
@@ -554,7 +562,37 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to Academy Catalog</span>
           </button>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold">{course.title}</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-display text-2xl sm:text-3xl font-bold">{course.title}</h1>
+            {courseTags.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {courseTags.map((tag, tIdx) => {
+                  const isLive = tag.toLowerCase().includes('live');
+                  const isOpen = tag.toLowerCase().includes('open');
+                  const isComing = tag.toLowerCase().includes('coming');
+                  return (
+                    <span
+                      key={`${tag}-${tIdx}`}
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wide shadow-sm ${
+                        isLive
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                          : isOpen
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : isComing
+                          ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
+                          : 'bg-teal-500/15 text-teal-300 border border-teal-500/30'
+                      }`}
+                    >
+                      {isLive && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />}
+                      {isOpen && !isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                      {isComing && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                      <span>{tag}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs academy-text-secondary">
             <span>{course.category}</span>
@@ -1419,13 +1457,61 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
             exit={{ opacity: 0, y: -12 }}
             className="space-y-8"
           >
-            <div className="grid grid-cols-1 lg:grid-cols-10 gap-6 items-start">
-              {/* Left Side (70% -> 7 of 10 columns): Video Player, Lesson Details, PDF Download & Mark as Complete */}
-              <div className="lg:col-span-7 space-y-6">
+            <div
+              className={`grid grid-cols-1 ${
+                isTheaterMode ? 'lg:grid-cols-1' : 'lg:grid-cols-10'
+              } gap-6 items-start`}
+            >
+              {/* Left Side (or Full Width in Theater Mode): Video Player, Lesson Details, PDF Download & Mark as Complete */}
+              <div className={`${isTheaterMode ? 'w-full' : 'lg:col-span-7'} space-y-6`}>
                 {currentLesson ? (
                   <>
-                    <div className="rounded-xl overflow-hidden academy-surface border border-teal-500/30 bg-black">
-                      {isEmbedUrl(currentLesson.videoUrl) ? (
+                    <div className="relative rounded-xl overflow-hidden academy-surface border border-teal-500/30 bg-black shadow-2xl">
+                      {/* Theater Mode & Scale Toggle Button */}
+                      <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsTheaterMode(!isTheaterMode)}
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-950/85 hover:bg-slate-900 text-teal-300 border border-teal-500/40 backdrop-blur-md transition-all flex items-center gap-1.5 shadow-lg cursor-pointer"
+                          title={isTheaterMode ? 'Standard Layout' : 'Scale Bigger (Theater Mode)'}
+                        >
+                          {isTheaterMode ? (
+                            <Minimize2 className="w-3.5 h-3.5" />
+                          ) : (
+                            <Maximize2 className="w-3.5 h-3.5" />
+                          )}
+                          <span className="hidden sm:inline">
+                            {isTheaterMode ? 'Standard Layout' : 'Scale Bigger'}
+                          </span>
+                        </button>
+                      </div>
+
+                      {videoHasError ? (
+                        <div className="w-full aspect-video flex flex-col items-center justify-center p-6 text-center bg-slate-950 space-y-3">
+                          <p className="text-sm text-slate-300">
+                            Video playback stream momentarily unavailable or network interrupted.
+                          </p>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setVideoHasError(false)}
+                              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors cursor-pointer"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Retry Video</span>
+                            </button>
+                            <a
+                              href={currentLesson.videoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400 text-teal-300 transition-colors"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>Direct Stream Link</span>
+                            </a>
+                          </div>
+                        </div>
+                      ) : isEmbedUrl(currentLesson.videoUrl) ? (
                         <iframe
                           src={getEmbedUrl(currentLesson.videoUrl)}
                           title={currentLesson.title}
@@ -1435,13 +1521,16 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                         />
                       ) : (
                         <video
-                          key={currentLesson.videoUrl}
+                          key={`${currentLesson.videoUrl}-${currentLesson.id}`}
                           src={currentLesson.videoUrl}
                           poster={resolveThumbnailUrl(
                             currentLesson.thumbnailUrl || course.thumbnailUrl
                           )}
                           controls
-                          className="w-full aspect-video bg-black object-cover"
+                          preload="metadata"
+                          playsInline
+                          onError={() => setVideoHasError(true)}
+                          className="w-full aspect-video bg-black object-contain sm:object-cover transform-gpu"
                         />
                       )}
                     </div>
@@ -1698,6 +1787,8 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                                     lesson.thumbnailUrl || course.thumbnailUrl
                                   )}
                                   alt={lesson.title}
+                                  loading="lazy"
+                                  decoding="async"
                                   referrerPolicy="no-referrer"
                                   onError={(e) => {
                                     (e.currentTarget as HTMLImageElement).src =

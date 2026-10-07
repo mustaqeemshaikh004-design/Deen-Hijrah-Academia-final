@@ -18,7 +18,7 @@ import {
   Video,
   CheckCircle2,
 } from 'lucide-react';
-import { Course, Profile } from '../types.ts';
+import { Course, Profile, parseCourseTags } from '../types.ts';
 import { resolveThumbnailUrl, ACADEMY_ASSETS } from '../lib/assets.ts';
 import { getDetectedUserTimezone, convertClassTimeToRegion } from '../lib/timezone.ts';
 
@@ -175,6 +175,8 @@ export const CourseEnrollmentModal: React.FC<CourseEnrollmentModalProps> = ({
                   <img
                     src={resolveThumbnailUrl(course.thumbnailUrl)}
                     alt={course.title}
+                    loading="lazy"
+                    decoding="async"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
                       (e.currentTarget as HTMLImageElement).src = ACADEMY_ASSETS.courseSeerah;
@@ -182,9 +184,29 @@ export const CourseEnrollmentModal: React.FC<CourseEnrollmentModalProps> = ({
                     className="w-full sm:w-36 h-28 rounded-xl object-cover"
                   />
                   <div className="space-y-1.5 flex-1 min-w-0">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-400/20 text-teal-300">
-                      {course.category}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-400/20 text-teal-300">
+                        {course.category}
+                      </span>
+                      {parseCourseTags(course).map((tag, tIdx) => {
+                        const isLive = tag.toLowerCase().includes('live');
+                        const isOpen = tag.toLowerCase().includes('open');
+                        return (
+                          <span
+                            key={tIdx}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                              isLive
+                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                : isOpen
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                : 'bg-teal-500/10 text-teal-300 border border-teal-500/20'
+                            }`}
+                          >
+                            {tag}
+                          </span>
+                        );
+                      })}
+                    </div>
                     <h3 className="font-display text-lg font-bold text-white truncate">
                       {course.title}
                     </h3>
