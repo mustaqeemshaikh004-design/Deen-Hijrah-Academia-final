@@ -278,8 +278,8 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
 
   const isEnrolled = Boolean(enrollment) || isAdmin;
 
-  // STRICT RULE: Orientations (isFreePreview === true) are the ONLY recordings people can see unless and until they are enrolled in that course!
-  const canWatchCurrentLesson = isEnrolled || Boolean(currentLesson?.isFreePreview);
+  // Every recording on the homepage and academy is 100% free and unlocked for everyone to watch!
+  const canWatchCurrentLesson = true;
 
   const detectedTz = useMemo(() => getDetectedUserTimezone(), []);
   const convertedClassSchedule = useMemo(
@@ -1425,66 +1425,24 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                 {currentLesson ? (
                   <>
                     <div className="rounded-xl overflow-hidden academy-surface border border-teal-500/30 bg-black">
-                      {canWatchCurrentLesson ? (
-                        isEmbedUrl(currentLesson.videoUrl) ? (
-                          <iframe
-                            src={getEmbedUrl(currentLesson.videoUrl)}
-                            title={currentLesson.title}
-                            className="w-full aspect-video"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                          />
-                        ) : (
-                          <video
-                            key={currentLesson.videoUrl}
-                            src={currentLesson.videoUrl}
-                            poster={resolveThumbnailUrl(
-                              currentLesson.thumbnailUrl || course.thumbnailUrl
-                            )}
-                            controls
-                            className="w-full aspect-video bg-black object-cover"
-                          />
-                        )
+                      {isEmbedUrl(currentLesson.videoUrl) ? (
+                        <iframe
+                          src={getEmbedUrl(currentLesson.videoUrl)}
+                          title={currentLesson.title}
+                          className="w-full aspect-video"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
                       ) : (
-                        <div className="relative aspect-video w-full flex flex-col items-center justify-center p-8 text-center">
-                          <img
-                            src={resolveThumbnailUrl(
-                              currentLesson.thumbnailUrl || course.thumbnailUrl
-                            )}
-                            alt={currentLesson.title}
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              (e.currentTarget as HTMLImageElement).src =
-                                ACADEMY_ASSETS.courseSeerah;
-                            }}
-                            className="absolute inset-0 w-full h-full object-cover opacity-20"
-                          />
-                          <div className="relative z-10 max-w-md space-y-3">
-                            <Lock className="w-9 h-9 text-amber-400 mx-auto" />
-                            <h3 className="font-display text-xl font-bold text-white">
-                              Class Recording Locked Until Enrolled
-                            </h3>
-                            <p className="text-xs text-slate-300 leading-relaxed">
-                              Only <strong>Orientation Recordings</strong> are publicly viewable.
-                              Enroll in <strong>{course.title}</strong> to unlock all class
-                              recordings, downloadable lesson notes, and homework submissions.
-                            </p>
-                            <button
-                              type="button"
-                              disabled={isCourseFull}
-                              onClick={() => onEnroll(course.id)}
-                              className={`px-5 py-2.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
-                                isCourseFull
-                                  ? 'bg-rose-500/30 text-rose-200 cursor-not-allowed'
-                                  : 'bg-teal-400 text-slate-950 hover:bg-teal-300'
-                              }`}
-                            >
-                              {isCourseFull
-                                ? `Cohort Full (${studentsTaken}/${maxStudents})`
-                                : 'Enroll Now to Unlock Class Recordings'}
-                            </button>
-                          </div>
-                        </div>
+                        <video
+                          key={currentLesson.videoUrl}
+                          src={currentLesson.videoUrl}
+                          poster={resolveThumbnailUrl(
+                            currentLesson.thumbnailUrl || course.thumbnailUrl
+                          )}
+                          controls
+                          className="w-full aspect-video bg-black object-cover"
+                        />
                       )}
                     </div>
 
@@ -1669,7 +1627,7 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                     </span>
                   </div>
                   <p className="text-[11px] academy-text-secondary">
-                    Orientations are open to all; class recordings &amp; resources unlock upon enrollment.
+                    All class recordings and resources are 100% free and open for everyone to watch.
                   </p>
 
                   {/* File-Type Icon Legend (PDF, Doc, Link) */}
@@ -1756,17 +1714,9 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
 
                               <div className="flex items-center justify-between text-[11px] academy-text-muted font-mono-tabular">
                                 <span>{lesson.duration}</span>
-                                {lesson.isFreePreview ? (
-                                  <span className="text-teal-400 font-semibold">
-                                    Orientation (Open)
-                                  </span>
-                                ) : !isUnlocked ? (
-                                  <span className="flex items-center gap-1 text-amber-400">
-                                    <Lock className="w-3 h-3" /> Enroll Only
-                                  </span>
-                                ) : (
-                                  <span className="text-emerald-400">Class Unlocked</span>
-                                )}
+                                <span className="text-emerald-400 font-semibold">
+                                  Free to Watch
+                                </span>
                               </div>
                             </button>
 

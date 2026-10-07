@@ -20,6 +20,7 @@ import {
   Upload,
   BookOpen,
   Lock,
+  Sparkles,
 } from 'lucide-react';
 import { ThemeProvider } from './context/ThemeContext.tsx';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
@@ -32,6 +33,8 @@ import { AdminPortal, AdminModule } from './components/AdminPortal.tsx';
 import { FacultyPage } from './components/FacultyPage.tsx';
 import { AcademyLogo, SplashIntro } from './components/AcademyLogo.tsx';
 import { MovingBackground } from './components/MovingBackground.tsx';
+import { CourseEnrollmentModal } from './components/CourseEnrollmentModal.tsx';
+import { OpenEnrollmentHeroBanner } from './components/OpenEnrollmentHeroBanner.tsx';
 import {
   Course,
   Lesson,
@@ -40,6 +43,7 @@ import {
   Profile,
   Enrollment,
   CalendarSettings,
+  parseCourseTags,
 } from './types.ts';
 import { resolveThumbnailUrl, ACADEMY_ASSETS } from './lib/assets.ts';
 import {
@@ -93,9 +97,13 @@ function AcademyPortalContent() {
 
   // Show the animated Logo Splash Intro first before transitioning into the homepage
   const [showSplash, setShowSplash] = useState<boolean>(true);
+  // Big Open for Enrollment box (Seerahverse / Source Code style) that appears on website with a cross button to dismiss
+  const [showEnrollmentModalBox, setShowEnrollmentModalBox] = useState<boolean>(true);
   const [activeView, setActiveView] = useState<ActiveView>('home');
   const [adminInitialModule, setAdminInitialModule] = useState<AdminModule>('courses');
   const [watchingCourse, setWatchingCourse] = useState<Course | null>(null);
+  const [enrollingCourse, setEnrollingCourse] = useState<Course | null>(null);
+  const [enrollmentStatusFilter, setEnrollmentStatusFilter] = useState<'all' | 'open' | 'coming_soon' | 'live'>('all');
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -218,38 +226,54 @@ function AcademyPortalContent() {
   const filteredCourses = useMemo(() => {
     return publishedCourses.filter((c) => {
       if (selectedCategory !== 'All' && c.category !== selectedCategory) return false;
+      const cTags = parseCourseTags(c).map((t) => t.toLowerCase());
+      if (enrollmentStatusFilter !== 'all') {
+        const cStatus = c.enrollmentStatus || 'open';
+        const matchesStatus = cStatus === enrollmentStatusFilter;
+        const matchesTag =
+          (enrollmentStatusFilter === 'live' && cTags.some((t) => t.includes('live'))) ||
+          (enrollmentStatusFilter === 'open' && cTags.some((t) => t.includes('open'))) ||
+          (enrollmentStatusFilter === 'coming_soon' && cTags.some((t) => t.includes('coming')));
+        if (!matchesStatus && !matchesTag) return false;
+      }
       if (
         searchQuery.trim() &&
         !c.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !c.description.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !c.instructorName.toLowerCase().includes(searchQuery.toLowerCase())
+        !c.instructorName.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        !cTags.some((t) => t.includes(searchQuery.toLowerCase()))
       ) {
         return false;
       }
       return true;
     });
-  }, [publishedCourses, selectedCategory, searchQuery]);
+  }, [publishedCourses, selectedCategory, enrollmentStatusFilter, searchQuery]);
 
-  const handleEnrollCourse = async (courseId: number) => {
+  const handleStartEnrollWizard = (course: Course) => {
+    setEnrollingCourse(course);
+  };
+
+  const handleEnrollCourse = async (courseId: number, enrollmentData?: any) => {
     if (!profile) {
       openAuthModal('create');
-      showToast('Sign in with Google or create an account to enroll in this course!');
+      showToast('Sign in with Google or create an account to finalize your admission!');
       return;
     }
 
     const res = await authFetch('/api/enrollments', {
       method: 'POST',
-      body: JSON.stringify({ courseId }),
+      body: JSON.stringify({ courseId, ...enrollmentData }),
     });
     if (res.ok) {
       await handleRefreshAll();
       const targetCourse = courses.find((c) => c.id === courseId);
       showToast(
-        `Enrolled in ${targetCourse?.title || 'course'}! Class recordings, homework & Zoom links unlocked.`
+        `Mubarak! You are officially admitted to ${targetCourse?.title || 'course'}! Recordings, homework & Zoom links unlocked.`
       );
     } else {
       const errData = await res.json().catch(() => ({}));
       showToast(errData.error || 'Unable to enroll in course.');
+      throw new Error(errData.error || 'Enrollment failed');
     }
   };
 
@@ -458,6 +482,25 @@ function AcademyPortalContent() {
           }}
         />
 
+        {/* GRAND OPEN FOR ENROLLMENT BOX (SEERAHVERSE & SOURCE CODE STYLE)
+            Appears on the website after the logo intro with a cross (✕) button so users can easily dismiss it */}
+        <OpenEnrollmentHeroBanner
+          isOpen={!showSplash && showEnrollmentModalBox}
+          onClose={() => setShowEnrollmentModalBox(false)}
+          courses={publishedCourses}
+          enrolledCourseIds={enrolledCourseIds}
+          onStartEnroll={(c) => {
+            setShowEnrollmentModalBox(false);
+            setEnrollingCourse(c);
+          }}
+          onExploreCourses={() => {
+            setShowEnrollmentModalBox(false);
+            const el = document.getElementById('courses-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+            else setActiveView('courses');
+          }}
+        />
+
         {/* Floating Notification Banner */}
         <AnimatePresence>
           {toastMessage && (
@@ -495,7 +538,11 @@ function AcademyPortalContent() {
                   messages={messages}
                   isAdmin={Boolean(isAdmin)}
                   onBack={() => setWatchingCourse(null)}
-                  onEnroll={handleEnrollCourse}
+                  onEnroll={async (courseId) => {
+                    const c = courses.find((item) => item.id === courseId) || watchingCourse;
+                    if (c) setEnrollingCourse(c);
+                    else await handleEnrollCourse(courseId);
+                  }}
                   onToggleLessonComplete={handleToggleLessonComplete}
                   onSubmitHomework={handleSubmitHomework}
                   onGradeHomework={handleGradeHomework}
@@ -546,7 +593,11 @@ function AcademyPortalContent() {
                   homework={homework}
                   allProfiles={profiles}
                   onWatchCourse={(course) => setWatchingCourse(course)}
-                  onEnrollCourse={handleEnrollCourse}
+                  onEnrollCourse={async (courseId) => {
+                    const c = courses.find((item) => item.id === courseId);
+                    if (c) setEnrollingCourse(c);
+                    else await handleEnrollCourse(courseId);
+                  }}
                   onToggleLessonProgress={handleToggleCourseLessonProgress}
                   onSendMessage={handleSendMessage}
                   onMarkMessageRead={handleMarkMessageRead}
@@ -574,7 +625,11 @@ function AcademyPortalContent() {
                   isAdmin={Boolean(isAdmin)}
                   calendarSettings={calendarSettings}
                   onUpdateCalendarSettings={handleUpdateCalendarSettings}
-                  onEnrollCourse={handleEnrollCourse}
+                  onEnrollCourse={async (courseId) => {
+                    const c = courses.find((item) => item.id === courseId);
+                    if (c) setEnrollingCourse(c);
+                    else await handleEnrollCourse(courseId);
+                  }}
                   onOpenWatchCourse={(courseId) => {
                     const target = courses.find((c) => c.id === courseId);
                     if (target) setWatchingCourse(target);
@@ -649,27 +704,56 @@ function AcademyPortalContent() {
                 }}
               >
                 {activeView === 'home' && (
-                  <motion.div variants={sectionRevealVariants}>
-                    <HeroMediaShowcase
-                      slides={slides}
-                      isAdmin={Boolean(isAdmin)}
-                      hasEnrolledCourses={enrolledCourseIds.length > 0}
-                      onExploreCourses={() => {
-                        const el = document.getElementById('courses-section');
-                        if (el) el.scrollIntoView({ behavior: 'smooth' });
-                        else setActiveView('courses');
-                      }}
-                      onOpenCalendar={() => {
-                        const el = document.getElementById('calendar-section');
-                        if (el) el.scrollIntoView({ behavior: 'smooth' });
-                        else setActiveView('calendar');
-                      }}
-                      onOpenAdminSlides={() => {
-                        setAdminInitialModule('homepage_media');
-                        setActiveView('admin');
-                      }}
-                    />
-                  </motion.div>
+                  <>
+                    {/* Admissions Open Notification Bar: Allows reopening the Big Box anytime if dismissed */}
+                    {publishedCourses.some((c) => c.enrollmentStatus !== 'coming_soon') && (
+                      <motion.div
+                        variants={sectionRevealVariants}
+                        className="bg-gradient-to-r from-amber-400/10 via-amber-400/20 to-teal-400/10 border-b border-amber-400/30 px-6 py-2.5"
+                      >
+                        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                            <span className="font-bold text-amber-300 uppercase tracking-wider">
+                              Cohort 2026 Admissions Open:
+                            </span>
+                            <span className="text-slate-200">
+                              {publishedCourses.filter((c) => c.enrollmentStatus !== 'coming_soon').length} Program{publishedCourses.length > 1 ? 's' : ''} currently accepting student enrollment.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowEnrollmentModalBox(true)}
+                            className="px-3 py-1 rounded-lg bg-amber-400 text-slate-950 font-bold hover:bg-amber-300 transition-colors shadow-sm shrink-0 cursor-pointer"
+                          >
+                            Open Admissions Box
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    <motion.div variants={sectionRevealVariants}>
+                      <HeroMediaShowcase
+                        slides={slides}
+                        isAdmin={Boolean(isAdmin)}
+                        hasEnrolledCourses={enrolledCourseIds.length > 0}
+                        onExploreCourses={() => {
+                          const el = document.getElementById('courses-section');
+                          if (el) el.scrollIntoView({ behavior: 'smooth' });
+                          else setActiveView('courses');
+                        }}
+                        onOpenCalendar={() => {
+                          const el = document.getElementById('calendar-section');
+                          if (el) el.scrollIntoView({ behavior: 'smooth' });
+                          else setActiveView('calendar');
+                        }}
+                        onOpenAdminSlides={() => {
+                          setAdminInitialModule('homepage_media');
+                          setActiveView('admin');
+                        }}
+                      />
+                    </motion.div>
+                  </>
                 )}
 
                 {/* Quick Faculty Admin Setup Bar on Homepage (Strictly Hidden for Students) */}
@@ -783,19 +867,18 @@ function AcademyPortalContent() {
                   </motion.div>
                 )}
 
-                {/* COURSE SHOWCASE GRID (3-Column Responsive Card Layout with Enrollment Rate, Student Cap, Syllabus Boxes & Local Timezone) */}
+                {/* COURSE SHOWCASE GRID (Responsive Card Layout using full space with Enrollment Rate, Student Cap, Syllabus Boxes & Local Timezone) */}
                 <motion.section
                   id="courses-section"
                   variants={sectionRevealVariants}
-                  className="max-w-7xl mx-auto px-6 lg:px-10 py-12 lg:py-16 space-y-8"
+                  className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-10 py-12 lg:py-16 space-y-8"
                 >
                   <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 pb-6 border-b academy-divider">
                     <div>
                       <div className="flex items-center gap-2 text-xs font-medium text-teal-400">
                         <Globe className="w-3.5 h-3.5" />
                         <span>
-                          Class Times Automatically Shown in Your Region ({detectedTz}) ·
-                          Orientations Open to All
+                          Class Times Automatically Shown in Your Region ({detectedTz}) · All Recordings 100% Free to Watch
                         </span>
                       </div>
                       <h2 className="font-display text-2xl sm:text-3xl font-bold mt-1">
@@ -804,18 +887,42 @@ function AcademyPortalContent() {
                     </div>
 
                     {/* Search & Category Segmented Filter */}
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3">
                       <div className="relative">
                         <Search className="w-3.5 h-3.5 academy-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
                         <input
                           type="text"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="Search courses or faculty..."
+                          placeholder="Search courses, tags, or faculty..."
                           className="pl-8 pr-3 py-1.5 text-xs rounded-lg academy-elevated focus:outline-none focus:border-teal-400"
                         />
                       </div>
 
+                      {/* Enrollment Status Filter (All | Open | Live | Coming Soon) */}
+                      <div className="flex items-center gap-1 p-1 rounded-lg academy-elevated overflow-x-auto">
+                        {[
+                          { key: 'all', label: 'All Programs' },
+                          { key: 'open', label: '🟢 Open for Enrollment' },
+                          { key: 'live', label: '🔴 Live Now' },
+                          { key: 'coming_soon', label: '🟡 Coming Soon' },
+                        ].map((st) => (
+                          <button
+                            key={st.key}
+                            type="button"
+                            onClick={() => setEnrollmentStatusFilter(st.key as any)}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors whitespace-nowrap ${
+                              enrollmentStatusFilter === st.key
+                                ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            {st.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Category Filter */}
                       <div className="flex items-center gap-1 p-1 rounded-lg academy-elevated overflow-x-auto">
                         {categories.map((cat) => (
                           <button
@@ -836,8 +943,8 @@ function AcademyPortalContent() {
                   </div>
 
                   {loadingPortal ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {[1, 2, 3].map((n) => (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {[1, 2, 3, 4].map((n) => (
                         <div
                           key={n}
                           className="h-96 rounded-xl academy-surface animate-pulse p-5"
@@ -849,7 +956,7 @@ function AcademyPortalContent() {
                       variants={gridContainerVariants}
                       initial="hidden"
                       animate={showSplash ? 'hidden' : 'visible'}
-                      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-6 lg:gap-8"
                     >
                       {filteredCourses.map((course) => {
                         const isEnrolled = enrolledCourseIds.includes(course.id);
@@ -910,12 +1017,40 @@ function AcademyPortalContent() {
                                 </div>
                               </div>
 
-                              {/* Card Body — Clean Unboxed Metadata + Capacity + Local Timezone */}
+                              {/* Card Body — Clean Metadata + Multi-Tags + Capacity + Local Timezone */}
                               <div className="p-6 space-y-3">
-                                <div className="flex items-center gap-2 text-xs text-teal-400 font-medium">
-                                  <span>{course.category}</span>
-                                  <span aria-hidden="true">·</span>
-                                  <span>Faculty: {course.instructorName}</span>
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                  <div className="flex items-center gap-2 text-xs text-teal-400 font-medium">
+                                    <span>{course.category}</span>
+                                    <span aria-hidden="true">·</span>
+                                    <span>Faculty: {course.instructorName}</span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {parseCourseTags(course).map((tag, tIdx) => {
+                                      const isLive = tag.toLowerCase().includes('live');
+                                      const isOpen = tag.toLowerCase().includes('open');
+                                      const isComing = tag.toLowerCase().includes('coming');
+                                      return (
+                                        <span
+                                          key={tIdx}
+                                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide flex items-center gap-1 whitespace-nowrap shadow-sm ${
+                                            isLive
+                                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                              : isOpen
+                                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                              : isComing
+                                              ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
+                                              : 'bg-teal-500/15 text-teal-300 border border-teal-500/30'
+                                          }`}
+                                        >
+                                          {isLive && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />}
+                                          {isOpen && !isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                                          {isComing && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                                          <span>{tag}</span>
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
 
                                 <h3
@@ -969,68 +1104,45 @@ function AcademyPortalContent() {
                                   </div>
                                 </div>
 
-                                {/* Orientation vs Class Recording Breakdown */}
-                                <div className="pt-1 flex flex-wrap items-center gap-2 text-[11px] academy-text-muted font-mono-tabular">
-                                  <span className="text-teal-400">
-                                    {orientationCount} Orientation (Open)
-                                  </span>
-                                  <span aria-hidden="true">·</span>
-                                  <span className="inline-flex items-center gap-1">
-                                    {!isEnrolled && <Lock className="w-3 h-3 text-amber-400" />}
-                                    <span>{classRecordingCount} Class Recordings</span>
+                                {/* All Recordings Free for Everyone to Watch */}
+                                <div className="pt-1 flex flex-wrap items-center gap-2 text-[11px] font-mono-tabular">
+                                  <span className="text-emerald-400 font-bold flex items-center gap-1">
+                                    <Play className="w-3.5 h-3.5 fill-current" />
+                                    <span>{courseLessons.length} Recordings · Free for Everyone</span>
                                   </span>
                                 </div>
                               </div>
                             </div>
 
-                            {/* Card Footer Actions */}
+                            {/* Card Footer Actions: Every recording is free for everyone to watch */}
                             <div className="p-6 pt-0 space-y-2.5">
-                              <div className="flex items-center gap-2">
-                                {isEnrolled ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setWatchingCourse(course)}
+                                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 hover:bg-emerald-500/30 transition-colors whitespace-nowrap cursor-pointer"
+                                >
+                                  <Play className="w-3.5 h-3.5 fill-current" />
+                                  <span>Watch Free Recordings</span>
+                                </button>
+                                {!isEnrolled && course.enrollmentStatus !== 'coming_soon' && !isCourseFull && (
                                   <button
                                     type="button"
-                                    onClick={() => setWatchingCourse(course)}
-                                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors whitespace-nowrap"
+                                    onClick={() => handleStartEnrollWizard(course)}
+                                    className="py-2.5 px-3.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors whitespace-nowrap cursor-pointer"
                                   >
-                                    <Play className="w-3.5 h-3.5" />
-                                    <span>Open Recordings, Syllabus &amp; Homework</span>
+                                    Enroll ({course.price || 'Free'})
                                   </button>
-                                ) : isCourseFull ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      disabled
-                                      className="flex-1 py-2.5 px-4 rounded-lg text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40 cursor-not-allowed whitespace-nowrap"
-                                    >
-                                      Cohort Full ({studentsTaken}/{maxStudents})
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setWatchingCourse(course)}
-                                      className="py-2.5 px-3 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400/50 transition-colors whitespace-nowrap"
-                                    >
-                                      Syllabus &amp; Orientation
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleEnrollCourse(course.id)}
-                                      className="flex-1 py-2.5 px-4 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors whitespace-nowrap"
-                                    >
-                                      Enroll Now ({course.price})
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setWatchingCourse(course)}
-                                      className="flex items-center gap-1 py-2.5 px-3 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400/50 transition-colors whitespace-nowrap"
-                                    >
-                                      <BookOpen className="w-3.5 h-3.5 text-teal-400" />
-                                      <span>Syllabus</span>
-                                    </button>
-                                  </>
                                 )}
+                                <button
+                                  type="button"
+                                  onClick={() => setWatchingCourse(course)}
+                                  className="flex items-center gap-1 py-2.5 px-3 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400/50 transition-colors whitespace-nowrap cursor-pointer"
+                                  title="View full syllabus and module breakdown"
+                                >
+                                  <BookOpen className="w-3.5 h-3.5 text-teal-400" />
+                                  <span>Syllabus</span>
+                                </button>
                               </div>
                             </div>
                           </motion.article>
@@ -1397,6 +1509,30 @@ function AcademyPortalContent() {
           </div>
         </footer>
       </motion.div>
+
+      {/* 4-Step Official Admissions & Enrollment Process Modal */}
+      {enrollingCourse && (
+        <CourseEnrollmentModal
+          course={enrollingCourse}
+          profile={profile}
+          isOpen={Boolean(enrollingCourse)}
+          onClose={() => setEnrollingCourse(null)}
+          onCompleteEnrollment={async (courseId, enrollmentData) => {
+            await handleEnrollCourse(courseId, enrollmentData);
+          }}
+          onOpenClassroom={(courseId) => {
+            const c = courses.find((item) => item.id === courseId);
+            if (c) {
+              setEnrollingCourse(null);
+              setWatchingCourse(c);
+            }
+          }}
+          onOpenDashboard={() => {
+            setEnrollingCourse(null);
+            setActiveView('dashboard');
+          }}
+        />
+      )}
     </div>
   );
 }

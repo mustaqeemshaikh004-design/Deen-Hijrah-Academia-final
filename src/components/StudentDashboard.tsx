@@ -29,6 +29,7 @@ import {
   Profile,
   HomeworkSubmission,
   HomeworkGradeStatus,
+  parseCourseTags,
 } from '../types.ts';
 import { resolveThumbnailUrl, ACADEMY_ASSETS } from '../lib/assets.ts';
 import { InteractiveCalendar } from './InteractiveCalendar.tsx';
@@ -358,131 +359,157 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 lg:px-10 py-8 space-y-8">
-      {/* Top Student Dashboard Header with Country Timezone Sync */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-6 border-b academy-divider">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-teal-400">
-            <Globe className="w-3.5 h-3.5" />
-            <span>
-              Student Learning Portal · Synced Country Timezone:{' '}
-              <strong className="font-mono-tabular">{selectedTimezone}</strong>
-            </span>
-            <select
-              value={selectedTimezone}
-              onChange={(e) => setSelectedTimezone(e.target.value)}
-              title="Sync all course class times, Zoom meetings, and course calendars to your country timezone"
-              className="ml-1 px-2.5 py-1 rounded-md academy-elevated border border-teal-500/30 text-xs font-medium text-white focus:outline-none focus:border-teal-400 cursor-pointer"
-            >
-              <option value={detectedTz} className="bg-slate-900 text-white">
-                Auto-Detected ({detectedTz})
-              </option>
-              {WORLD_TIMEZONES.filter((w) => w.tz !== detectedTz).map((w) => (
-                <option key={w.tz} value={w.tz} className="bg-slate-900 text-white">
-                  {w.label}
-                </option>
-              ))}
-            </select>
+    <div className="w-full max-w-[1720px] 2xl:max-w-[1920px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 py-6 md:py-8 space-y-6 md:space-y-8">
+      {/* Top Student Dashboard Header with Country Timezone Sync & Full-Width Tabs */}
+      <div className="space-y-5 pb-6 border-b academy-divider">
+        {/* Top Tier: Greeting, Scholar Status & Country Timezone */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-teal-400/10 text-teal-300 border border-teal-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+                Student Learning Suite
+              </span>
+              <span className="text-xs text-slate-500">·</span>
+              <span className="text-xs text-slate-400 font-medium">Deen Hijrah Academia</span>
+              <span className="text-xs text-slate-500">·</span>
+              <span className="text-xs text-emerald-400 font-mono-tabular">
+                Enrolled in {enrolledCourses.length} Program{enrolledCourses.length === 1 ? '' : 's'}
+              </span>
+            </div>
+            <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-white">
+              As-salamu alaykum, {profile?.fullName || 'Scholar'}
+            </h1>
+            <p className="text-xs sm:text-sm academy-text-secondary max-w-4xl">
+              Watch class recordings for your enrolled courses, join scheduled live Zoom sessions in
+              your local country time, submit homework assignments, and chat directly with Ustadh
+              Mustaqeem Shaikh.
+            </p>
           </div>
-          <h1 className="font-display text-3xl font-bold">
-            As-salamu alaykum, {profile?.fullName || 'Scholar'}
-          </h1>
-          <p className="text-sm academy-text-secondary">
-            Watch class recordings for your enrolled courses, join scheduled live Zoom sessions in
-            your local country time, submit homework assignments, and chat directly with Ustadh
-            Mustaqeem Shaikh.
-          </p>
+
+          {/* Timezone sync box - prominent, clean, and easily accessible */}
+          <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl academy-elevated border border-teal-500/25 text-xs text-teal-300 shrink-0 self-start lg:self-auto shadow-sm">
+            <Globe className="w-4 h-4 text-teal-400 shrink-0" />
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+              <span className="text-[11px] text-slate-400 font-medium">Your Local Timezone:</span>
+              <select
+                value={selectedTimezone}
+                onChange={(e) => setSelectedTimezone(e.target.value)}
+                title="Sync all course class times, Zoom meetings, and course calendars to your country timezone"
+                className="px-2.5 py-1 rounded-md bg-slate-900 border border-teal-500/30 text-xs font-semibold text-teal-300 focus:outline-none focus:border-teal-400 cursor-pointer"
+              >
+                <option value={detectedTz} className="bg-slate-900 text-white">
+                  Auto-Detected ({detectedTz})
+                </option>
+                {WORLD_TIMEZONES.filter((w) => w.tz !== detectedTz).map((w) => (
+                  <option key={w.tz} value={w.tz} className="bg-slate-900 text-white">
+                    {w.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
-        {/* Dashboard Section Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-lg academy-elevated shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab('overview')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-              activeTab === 'overview'
-                ? 'bg-teal-400 text-slate-950 font-semibold'
-                : 'academy-text-secondary hover:text-teal-300'
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>My Courses &amp; Progress ({enrolledCourses.length})</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('roadmap')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-              activeTab === 'roadmap'
-                ? 'bg-teal-400 text-slate-950 font-semibold'
-                : 'academy-text-secondary hover:text-teal-300'
-            }`}
-          >
-            <Compass className="w-3.5 h-3.5" />
-            <span>Path of Knowledge</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('homework')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-              activeTab === 'homework'
-                ? 'bg-teal-400 text-slate-950 font-semibold'
-                : 'academy-text-secondary hover:text-teal-300'
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Homework &amp; Faculty Feedback ({homework.length})</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('feedback')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-              activeTab === 'feedback'
-                ? 'bg-teal-400 text-slate-950 font-semibold'
-                : 'academy-text-secondary hover:text-teal-300'
-            }`}
-          >
-            <MessageSquarePlus className="w-3.5 h-3.5" />
-            <span>Class &amp; Website Feedback</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('zoom')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-              activeTab === 'zoom'
-                ? 'bg-teal-400 text-slate-950 font-semibold'
-                : 'academy-text-secondary hover:text-teal-300'
-            }`}
-          >
-            <Video className="w-3.5 h-3.5" />
-            <span>Zoom Meetings ({myScheduledZoomMeetings.length})</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setCalendarCourseFilter(null);
-              setActiveTab('calendar');
-            }}
-            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-              activeTab === 'calendar'
-                ? 'bg-teal-400 text-slate-950 font-semibold'
-                : 'academy-text-secondary hover:text-teal-300'
-            }`}
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            <span>Course Calendars</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('inbox')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-              activeTab === 'inbox'
-                ? 'bg-teal-400 text-slate-950 font-semibold'
-                : 'academy-text-secondary hover:text-teal-300'
-            }`}
-          >
-            <Mail className="w-3.5 h-3.5" />
-            <span>Chat with Tutor {unreadCount > 0 ? `(${unreadCount})` : ''}</span>
-          </button>
+        {/* Dedicated Full-Width Navigation Bar (Spans entire width, no more cramming to the far right!) */}
+        <div className="w-full bg-slate-950/80 academy-elevated p-1.5 rounded-2xl border border-slate-800/80 shadow-md">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1.5 w-full">
+            <button
+              type="button"
+              onClick={() => setActiveTab('overview')}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+                activeTab === 'overview'
+                  ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 shrink-0" />
+              <span className="truncate">My Courses ({enrolledCourses.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('roadmap')}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+                activeTab === 'roadmap'
+                  ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
+              }`}
+            >
+              <Compass className="w-4 h-4 shrink-0" />
+              <span className="truncate">Path of Knowledge</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('homework')}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+                activeTab === 'homework'
+                  ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
+              }`}
+            >
+              <FileText className="w-4 h-4 shrink-0" />
+              <span className="truncate">Homework ({homework.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('feedback')}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+                activeTab === 'feedback'
+                  ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
+              }`}
+            >
+              <MessageSquarePlus className="w-4 h-4 shrink-0" />
+              <span className="truncate">Feedback</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('zoom')}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+                activeTab === 'zoom'
+                  ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
+              }`}
+            >
+              <Video className="w-4 h-4 shrink-0" />
+              <span className="truncate">Live Zoom ({myScheduledZoomMeetings.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCalendarCourseFilter(null);
+                setActiveTab('calendar');
+              }}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+                activeTab === 'calendar'
+                  ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
+              }`}
+            >
+              <Calendar className="w-4 h-4 shrink-0" />
+              <span className="truncate">Calendars</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('inbox')}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+                activeTab === 'inbox'
+                  ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
+              }`}
+            >
+              <Mail className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                Chat {unreadCount > 0 ? `(${unreadCount})` : ''}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -597,9 +624,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </div>
 
             {enrolledCourses.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {enrolledCourses.map((course) => {
                   const enrollment = myEnrollments.find((e) => e.courseId === course.id);
+                  const courseTags = parseCourseTags(course);
                   const courseLessonsList = lessons
                     .filter((l) => l.courseId === course.id)
                     .sort((a, b) => a.positionOrder - b.positionOrder || a.id - b.id);
@@ -669,6 +697,28 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         </div>
 
                         <div className="p-5 space-y-3">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {courseTags.map((tag, tIdx) => {
+                              const isLive = tag.toLowerCase().includes('live');
+                              const isOpen = tag.toLowerCase().includes('open');
+                              return (
+                                <span
+                                  key={tIdx}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold tracking-wider uppercase ${
+                                    isLive
+                                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                      : isOpen
+                                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                      : 'bg-teal-500/10 text-teal-300 border border-teal-500/30'
+                                  }`}
+                                >
+                                  {isLive && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />}
+                                  {isOpen && !isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                                  {tag}
+                                </span>
+                              );
+                            })}
+                          </div>
                           <div className="text-xs academy-text-secondary">
                             {course.category} · {course.instructorName}
                           </div>

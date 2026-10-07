@@ -23,6 +23,8 @@ import {
   Sparkles,
   AlertCircle,
   Eye,
+  Tag,
+  X,
 } from 'lucide-react';
 import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
 import {
@@ -35,6 +37,7 @@ import {
   Message,
   SyllabusBox,
   HomeworkSubmission,
+  parseCourseTags,
 } from '../types.ts';
 import { PRESET_THUMBNAILS, resolveThumbnailUrl, ACADEMY_ASSETS } from '../lib/assets.ts';
 import { WORLD_TIMEZONES, getDetectedUserTimezone } from '../lib/timezone.ts';
@@ -134,21 +137,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // Course Form State
   const [editingCourseId, setEditingCourseId] = useState<number | null>(null);
   const [courseTitle, setCourseTitle] = useState('');
-  const [courseCategory, setCourseCategory] = useState('Seerah & History');
+  const [courseCategory, setCourseCategory] = useState('Islamic Studies');
   const [coursePrice, setCoursePrice] = useState('Free');
-  const [courseDuration, setCourseDuration] = useState('12 Weeks');
+  const [courseDuration, setCourseDuration] = useState('');
   const [courseInstructor, setCourseInstructor] = useState(() =>
     isInstructor && profile ? profile.fullName : 'Mustaqeem Shaikh'
   );
-  const [courseLaunchDate, setCourseLaunchDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-      d.getDate()
-    ).padStart(2, '0')}`;
-  });
+  const [courseLaunchDate, setCourseLaunchDate] = useState('');
   const [courseMaxStudents, setCourseMaxStudents] = useState<number>(30);
   const [courseInitialEnrolled, setCourseInitialEnrolled] = useState<number>(0);
-  const [courseClassDays, setCourseClassDays] = useState('Saturday & Wednesday');
+  const [courseClassDays, setCourseClassDays] = useState('');
   const [courseClassStartTime, setCourseClassStartTime] = useState('14:00');
   const [courseClassTimezone, setCourseClassTimezone] = useState(detectedTz || 'America/New_York');
   const [courseShortDesc, setCourseShortDesc] = useState('');
@@ -166,17 +164,42 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   } | null>(null);
   const [isSavingCourse, setIsSavingCourse] = useState(false);
   const [courseSaveError, setCourseSaveError] = useState<string | null>(null);
-  const [courseSyllabusBoxes, setCourseSyllabusBoxes] = useState<SyllabusBox[]>([
-    {
-      week: 'Module 01 · Weeks 1–3',
-      title: 'Foundational Sources & Methodology',
-      topics: 'Introduction to primary classical texts, historical context, and weekly analytical framework.',
-      deliverable: 'Module 1 Written Reflection',
-    },
-  ]);
+  const [courseSyllabusBoxes, setCourseSyllabusBoxes] = useState<SyllabusBox[]>([]);
   const [courseThumb, setCourseThumb] = useState('preset:seerah');
   const [courseStatus, setCourseStatus] = useState<'published' | 'draft'>('published');
+  const [courseEnrollmentStatus, setCourseEnrollmentStatus] = useState<'open' | 'coming_soon' | 'live'>('open');
+  const [courseTags, setCourseTags] = useState<string[]>(['Open for Enrollment', 'Live Cohort']);
+  const [customTagInput, setCustomTagInput] = useState('');
   const [confirmDeleteCourseId, setConfirmDeleteCourseId] = useState<number | null>(null);
+
+  // Reset course form cleanly with no forced dummy data
+  const resetCourseFormClean = () => {
+    setEditingCourseId(null);
+    setCourseTitle('');
+    setCourseCategory('Islamic Studies');
+    setCoursePrice('Free');
+    setCourseDuration('');
+    setCourseInstructor(isInstructor && profile ? profile.fullName : 'Mustaqeem Shaikh');
+    setCourseLaunchDate('');
+    setCourseMaxStudents(25);
+    setCourseInitialEnrolled(0);
+    setCourseClassDays('');
+    setCourseClassStartTime('14:00');
+    setCourseClassTimezone(detectedTz || 'America/New_York');
+    setCourseShortDesc('');
+    setCourseLongDesc('');
+    setCourseSyllabusText('');
+    setCourseSyllabusFileUrl('');
+    setUploadedSyllabusFileObj(null);
+    setUploadedSyllabusFileName('');
+    setCourseSyllabusBoxes([]);
+    setCourseThumb('preset:seerah');
+    setCourseStatus('published');
+    setCourseEnrollmentStatus('open');
+    setCourseTags(['Open for Enrollment']);
+    setCustomTagInput('');
+    setCourseSaveError(null);
+  };
 
   // Lesson & Recording Form State
   const [selectedLessonCourseId, setSelectedLessonCourseId] = useState<number>(
@@ -185,9 +208,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [editingLessonId, setEditingLessonId] = useState<number | null>(null);
   const [lessonTitle, setLessonTitle] = useState('');
   const [lessonDesc, setLessonDesc] = useState('');
-  const [lessonVideoUrl, setLessonVideoUrl] = useState(
-    'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
-  );
+  const [lessonVideoUrl, setLessonVideoUrl] = useState('');
   const [uploadingLessonVideo, setUploadingLessonVideo] = useState(false);
   const [uploadingLessonAttachment, setUploadingLessonAttachment] = useState(false);
   const [lessonThumb, setLessonThumb] = useState('preset:seerah');
@@ -195,12 +216,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [lessonOrder, setLessonOrder] = useState<number>(1);
   const [lessonFreePreview, setLessonFreePreview] = useState<boolean>(false); // True = Public Orientation Recording, False = Enrolled Class Recording ONLY
   const [lessonAttachment, setLessonAttachment] = useState('');
-  const [lessonScheduledDate, setLessonScheduledDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-      d.getDate()
-    ).padStart(2, '0')}`;
-  });
+  const [lessonScheduledDate, setLessonScheduledDate] = useState('');
 
   // Zoom Live Session & Course-Specific Calendar Event Form State (with Source Timezone)
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
@@ -223,9 +239,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     detectedTz || 'America/New_York'
   );
   const [eventDuration, setEventDuration] = useState('60 min');
-  const [eventZoomUrl, setEventZoomUrl] = useState('https://zoom.us/j/94827165011');
-  const [eventMeetingId, setEventMeetingId] = useState('948 2716 5011');
-  const [eventPasscode, setEventPasscode] = useState('HIJRAH26');
+  const [eventZoomUrl, setEventZoomUrl] = useState('');
+  const [eventMeetingId, setEventMeetingId] = useState('');
+  const [eventPasscode, setEventPasscode] = useState('');
   const [eventThumb, setEventThumb] = useState('preset:orientation');
   const [eventInstructor, setEventInstructor] = useState('Mustaqeem Shaikh');
   const [eventAudience, setEventAudience] = useState<'everyone' | 'enrolled'>('everyone');
@@ -237,9 +253,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [slideBadge, setSlideBadge] = useState('Orientation Session');
   const [slideMediaType, setSlideMediaType] = useState<'video' | 'image'>('video');
   const [slideThumb, setSlideThumb] = useState('preset:hero_academy');
-  const [slideVideoUrl, setSlideVideoUrl] = useState(
-    'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
-  );
+  const [slideVideoUrl, setSlideVideoUrl] = useState('');
   const [uploadingSlideVideo, setUploadingSlideVideo] = useState(false);
   const [slideCtaText, setSlideCtaText] = useState('Explore Curriculum');
   const [slideInstructor, setSlideInstructor] = useState('Mustaqeem Shaikh');
@@ -406,6 +420,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         syllabusFileUrl: courseSyllabusFileUrl.trim() || null,
         thumbnailUrl: courseThumb,
         status: courseStatus,
+        enrollmentStatus: courseEnrollmentStatus,
+        tags: JSON.stringify(courseTags),
       };
 
       const res = editingCourseId
@@ -421,14 +437,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       const resData = await res.json().catch(() => ({}));
 
       if (res.ok) {
-        setEditingCourseId(null);
-        setCourseTitle('');
-        setCourseShortDesc('');
-        setCourseLongDesc('');
-        setCourseSyllabusText('');
-        setCourseSyllabusFileUrl('');
-        setUploadedSyllabusFileObj(null);
-        setUploadedSyllabusFileName('');
+        resetCourseFormClean();
         await onRefreshData();
         showNotice(
           editingCourseId
@@ -859,22 +868,25 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       syllabus boxes that animate when clicked.
                     </p>
                   </div>
-                  {editingCourseId && (
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        setEditingCourseId(null);
-                        setCourseTitle('');
-                        setCourseShortDesc('');
-                        setCourseLongDesc('');
-                        setCourseSyllabusText('');
-                        setCourseSaveError(null);
-                      }}
-                      className="text-xs academy-text-secondary hover:text-teal-400"
+                      onClick={resetCourseFormClean}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 text-teal-300 border border-teal-500/30 transition-colors"
+                      title="Clear all fields and start a fresh course without any pre-filled dummy data"
                     >
-                      Cancel Edit
+                      + Blank Course Form
                     </button>
-                  )}
+                    {editingCourseId && (
+                      <button
+                        type="button"
+                        onClick={resetCourseFormClean}
+                        className="text-xs academy-text-secondary hover:text-teal-400"
+                      >
+                        Cancel Edit
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {courseSaveError && (
@@ -892,6 +904,204 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     </button>
                   </div>
                 )}
+
+                {/* Multi-Tag Options & Badges (Live, Open for Enrollment, Orientations Free, etc.) */}
+                <div className="p-4 rounded-xl academy-elevated border border-teal-500/30 space-y-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <label className="block text-xs font-bold text-teal-300 flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-teal-400" />
+                        <span>Course Multi-Tags &amp; Status Badges (Visible on Cards &amp; Filters)</span>
+                      </label>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Assign multiple tags at once (e.g. &ldquo;Live Cohort&rdquo;, &ldquo;Open for Enrollment&rdquo;, &ldquo;Orientations Free&rdquo;). Click presets to toggle or type any custom tag.
+                      </p>
+                    </div>
+                    <div className="text-[11px] font-mono-tabular text-teal-300 font-semibold shrink-0">
+                      {courseTags.length} Tag{courseTags.length === 1 ? '' : 's'} Active
+                    </div>
+                  </div>
+
+                  {/* Active Selected Tags Chips */}
+                  <div className="flex flex-wrap items-center gap-2 min-h-10 p-2.5 rounded-lg bg-slate-900/90 border border-slate-800">
+                    {courseTags.length === 0 ? (
+                      <span className="text-xs text-slate-500 italic">No tags selected. Click presets below or add a custom tag.</span>
+                    ) : (
+                      courseTags.map((tag, idx) => {
+                        const isLive = tag.toLowerCase().includes('live');
+                        const isOpen = tag.toLowerCase().includes('open');
+                        const isComing = tag.toLowerCase().includes('coming');
+                        return (
+                          <span
+                            key={idx}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold shadow-sm transition-all ${
+                              isLive
+                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/50'
+                                : isOpen
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
+                                : isComing
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50'
+                                : 'bg-teal-500/20 text-teal-200 border border-teal-500/50'
+                            }`}
+                          >
+                            {isLive && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />}
+                            {isOpen && !isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                            {isComing && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                            <span>{tag}</span>
+                            <button
+                              type="button"
+                              onClick={() => setCourseTags((prev) => prev.filter((t) => t !== tag))}
+                              className="hover:text-white p-0.5 ml-0.5 rounded hover:bg-white/10"
+                              title="Remove tag"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Quick Preset Tags to Click and Toggle */}
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Quick Preset Tags (Click to Toggle):</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { label: 'Open for Enrollment' },
+                        { label: 'Live Cohort' },
+                        { label: 'Live Now' },
+                        { label: 'Coming Soon' },
+                        { label: 'Orientations Free' },
+                        { label: 'Weekend Intensive' },
+                        { label: 'Self-Paced / Recorded' },
+                        { label: 'Certificate Program' },
+                        { label: 'Flagship Program' },
+                      ].map((preset) => {
+                        const isSelected = courseTags.includes(preset.label);
+                        return (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setCourseTags((prev) => prev.filter((t) => t !== preset.label));
+                              } else {
+                                setCourseTags((prev) => [...prev, preset.label]);
+                                if (preset.label.toLowerCase().includes('live')) setCourseEnrollmentStatus('live');
+                                else if (preset.label.toLowerCase().includes('open')) setCourseEnrollmentStatus('open');
+                                else if (preset.label.toLowerCase().includes('coming')) setCourseEnrollmentStatus('coming_soon');
+                              }
+                            }}
+                            className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all ${
+                              isSelected
+                                ? 'bg-teal-400 text-slate-950 font-bold border-teal-300 shadow-sm'
+                                : 'bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 border-slate-700'
+                            }`}
+                          >
+                            {isSelected ? '✓ ' : '+ '}
+                            {preset.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Custom Tag Input */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="text"
+                      value={customTagInput}
+                      onChange={(e) => setCustomTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = customTagInput.trim();
+                          if (val && !courseTags.includes(val)) {
+                            setCourseTags((prev) => [...prev, val]);
+                            setCustomTagInput('');
+                          }
+                        }
+                      }}
+                      placeholder="Type custom tag (e.g. Ramadan Intensive, Foundational, Arabic Beginners)..."
+                      className="flex-1 px-3 py-2 text-xs rounded-lg bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-teal-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = customTagInput.trim();
+                        if (val && !courseTags.includes(val)) {
+                          setCourseTags((prev) => [...prev, val]);
+                          setCustomTagInput('');
+                        }
+                      }}
+                      disabled={!customTagInput.trim()}
+                      className="px-3 py-2 rounded-lg text-xs font-semibold bg-teal-500 hover:bg-teal-400 text-slate-950 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                    >
+                      + Add Tag
+                    </button>
+                  </div>
+                </div>
+
+                {/* Cohort Admissions & Enrollment Status */}
+                <div>
+                  <label className="block text-xs font-semibold text-teal-400 mb-1.5">
+                    Primary Enrollment Mode (Synced with Admissions Wizard) *
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {[
+                      {
+                        id: 'open',
+                        label: 'Open for Enrollment',
+                        sub: 'Admissions active; students can enroll via multi-step wizard',
+                      },
+                      {
+                        id: 'coming_soon',
+                        label: 'Coming Soon',
+                        sub: 'Waitlist open; cohort starting soon',
+                      },
+                      {
+                        id: 'live',
+                        label: 'Live Cohort In-Session',
+                        sub: 'Current cohort underway; lectures in progress',
+                      },
+                    ].map((st) => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => {
+                          setCourseEnrollmentStatus(st.id as any);
+                          // Also automatically add tag if not yet present
+                          if (st.id === 'live' && !courseTags.includes('Live Cohort') && !courseTags.includes('Live Now')) {
+                            setCourseTags((prev) => [...prev, 'Live Cohort']);
+                          } else if (st.id === 'open' && !courseTags.includes('Open for Enrollment')) {
+                            setCourseTags((prev) => [...prev, 'Open for Enrollment']);
+                          } else if (st.id === 'coming_soon' && !courseTags.includes('Coming Soon')) {
+                            setCourseTags((prev) => [...prev, 'Coming Soon']);
+                          }
+                        }}
+                        className={`p-3 rounded-xl text-left border transition-all ${
+                          courseEnrollmentStatus === st.id
+                            ? 'border-teal-400 bg-teal-400/20 text-teal-200 ring-2 ring-teal-400/40 shadow-sm'
+                            : 'border-slate-800 academy-elevated text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        <div className="font-bold text-white text-xs flex items-center gap-1.5">
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              st.id === 'open'
+                                ? 'bg-emerald-400 animate-pulse'
+                                : st.id === 'coming_soon'
+                                ? 'bg-amber-400'
+                                : 'bg-teal-400'
+                            }`}
+                          />
+                          <span>{st.label}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-1">{st.sub}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -936,7 +1146,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       }`}
                     />
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <div>
                       <label className="block text-xs academy-text-secondary mb-1">Price</label>
                       <input
@@ -953,12 +1163,26 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         type="text"
                         value={courseDuration}
                         onChange={(e) => setCourseDuration(e.target.value)}
-                        placeholder="12 Weeks"
+                        placeholder="e.g. 12 Weeks"
                         className="w-full px-3 py-2 text-sm rounded-lg academy-elevated"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs academy-text-secondary mb-1">Status</label>
+                      <label className="block text-xs academy-text-secondary mb-1">Enrollment State</label>
+                      <select
+                        value={courseEnrollmentStatus}
+                        onChange={(e) =>
+                          setCourseEnrollmentStatus(e.target.value as 'open' | 'coming_soon' | 'live')
+                        }
+                        className="w-full px-2 py-2 text-sm rounded-lg academy-elevated font-medium text-teal-300"
+                      >
+                        <option value="open">🟢 Open for Enrollment</option>
+                        <option value="coming_soon">🟡 Coming Soon</option>
+                        <option value="live">🔴 Live Now</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs academy-text-secondary mb-1">Visibility</label>
                       <select
                         value={courseStatus}
                         onChange={(e) =>
@@ -966,8 +1190,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         }
                         className="w-full px-2 py-2 text-sm rounded-lg academy-elevated"
                       >
-                        <option value="published">Published</option>
-                        <option value="draft">Draft</option>
+                        <option value="published">Published (Visible to All)</option>
+                        <option value="draft">Draft (Admin Only)</option>
                       </select>
                     </div>
                   </div>
@@ -1477,6 +1701,26 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                 {course.price} · {course.classDays || 'Sat & Wed'} at{' '}
                                 {course.classStartTime || '14:00'} ({course.classTimezone || 'EST'})
                               </div>
+                              <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                                {parseCourseTags(course).map((tag, tIdx) => {
+                                  const isLive = tag.toLowerCase().includes('live');
+                                  const isOpen = tag.toLowerCase().includes('open');
+                                  return (
+                                    <span
+                                      key={tIdx}
+                                      className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                        isLive
+                                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                          : isOpen
+                                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                          : 'bg-teal-500/10 text-teal-300 border border-teal-500/20'
+                                      }`}
+                                    >
+                                      {tag}
+                                    </span>
+                                  );
+                                })}
+                              </div>
                             </div>
                           </div>
 
@@ -1517,6 +1761,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                 }
                                 setCourseThumb(course.thumbnailUrl);
                                 setCourseStatus(course.status);
+                                setCourseEnrollmentStatus(course.enrollmentStatus || 'open');
+                                const existingTags = parseCourseTags(course);
+                                setCourseTags(existingTags.length > 0 ? existingTags : ['Open for Enrollment']);
                               }}
                               className="p-2 rounded academy-surface hover:text-teal-400"
                               title="Edit Course"

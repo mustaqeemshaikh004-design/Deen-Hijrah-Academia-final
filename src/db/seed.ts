@@ -133,37 +133,11 @@ export async function ensureInitialAcademySetup(forceReseed = false) {
     const existingCourses = await db.select().from(courses);
     const existingSlides = await db.select().from(homepageSlides);
 
-    // IMPORTANT: Once the database has been initialized (wasAlreadyInitialized === true),
-    // NEVER re-seed automatically! Anything the admin adds stays permanently, and anything
-    // the admin deletes stays deleted permanently unless forceReseed is explicitly clicked.
+    // IMPORTANT: Once the database has been initialized or courses exist,
+    // NEVER overwrite or mutate course settings automatically!
+    // Leave all courses settings, syllabus, student limits, class days, times, and timezones
+    // exactly as the user configured them unless explicitly instructed or forceReseed is clicked.
     if (!forceReseed && (wasAlreadyInitialized || existingCourses.length > 0 || existingSlides.length > 0)) {
-      for (const c of existingCourses) {
-        if (!c.syllabusBoxes || c.syllabusBoxes === '[]') {
-          const isArabic = c.slug.includes('arabic');
-          const isUsul = c.slug.includes('usul');
-          await db
-            .update(courses)
-            .set({
-              maxStudents: isArabic ? 25 : isUsul ? 20 : 30,
-              initialEnrolledCount: isArabic ? 21 : isUsul ? 15 : 22,
-              classDays: isArabic
-                ? 'Sunday & Wednesday'
-                : isUsul
-                ? 'Friday & Sunday'
-                : 'Saturday & Tuesday',
-              classStartTime: isArabic ? '15:00' : isUsul ? '16:30' : '14:00',
-              classTimezone: 'America/New_York',
-              syllabusText:
-                'Complete all weekly reading folios prior to the live Zoom seminar. Only the Orientation Recording is visible to public visitors; full class recordings and homework portals unlock upon cohort enrollment.',
-              syllabusBoxes: isArabic
-                ? ARABIC_SYLLABUS_BOXES
-                : isUsul
-                ? USUL_SYLLABUS_BOXES
-                : SEERAH_SYLLABUS_BOXES,
-            })
-            .where(eq(courses.id, c.id));
-        }
-      }
       return { seeded: false, founderId: founderProfile.id };
     }
 
@@ -247,6 +221,7 @@ export async function ensureInitialAcademySetup(forceReseed = false) {
           syllabusText:
             'Academic Expectations: Students attend two weekly live Zoom classes (automatically displayed in your local country timezone), complete the primary source readings, and submit module homework assignments for faculty review by Ustadh Mustaqeem Shaikh.',
           syllabusBoxes: SEERAH_SYLLABUS_BOXES,
+          enrollmentStatus: 'open::tags:["Open for Enrollment","Live Cohort","Orientations Free","Flagship Program"]',
         },
         {
           title: 'Classical Arabic & Quranic Eloquence (Balaghah)',
@@ -271,6 +246,7 @@ export async function ensureInitialAcademySetup(forceReseed = false) {
           syllabusText:
             'Linguistic Immersion Protocol: Weekly morphological drills, live syntactic parsing on Zoom, and written homework submissions graded directly by faculty.',
           syllabusBoxes: ARABIC_SYLLABUS_BOXES,
+          enrollmentStatus: 'open::tags:["Open for Enrollment","Live Cohort","Linguistic Intensive"]',
         },
         {
           title: 'Usul al-Fiqh & Spiritual Ethics in the Modern Age',
@@ -295,6 +271,7 @@ export async function ensureInitialAcademySetup(forceReseed = false) {
           syllabusText:
             'Foundational Jurisprudence & Ethics Syllabus: Combines classical Usul al-Fiqh treatise readings with practical ethical case studies and weekly homework reflections.',
           syllabusBoxes: USUL_SYLLABUS_BOXES,
+          enrollmentStatus: 'open::tags:["Open for Enrollment","Ethics & Tazkiyah","Weekend Intensive"]',
         },
       ])
       .returning();

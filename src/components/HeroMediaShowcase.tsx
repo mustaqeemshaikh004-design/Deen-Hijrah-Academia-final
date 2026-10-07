@@ -75,23 +75,14 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
     }
   });
 
-  const [filterCategory, setFilterCategory] = useState<string>('All');
   const bgVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  const filteredSlides =
-    filterCategory === 'All'
-      ? slides
-      : slides.filter((s) => s.badgeText.toLowerCase().includes(filterCategory.toLowerCase()));
-
-  const activeSlides = filteredSlides.length > 0 ? filteredSlides : slides;
+  // Whatever video or image is put on the homescreen is immediately available for all to see
+  const activeSlides = slides;
   const currentSlide = activeSlides[activeIndex % Math.max(1, activeSlides.length)] || null;
 
-  // Orientations are viewable by all; class recordings viewable if enrolled or admin
-  const isCurrentSlideOrientation = Boolean(
-    currentSlide?.badgeText.toLowerCase().includes('orientation')
-  );
-  const canWatchCurrentSlideVideo =
-    isAdmin || isCurrentSlideOrientation || hasEnrolledCourses;
+  // Every recording and video on the homepage is 100% free and unlocked for everyone to watch
+  const canWatchCurrentSlideVideo = true;
 
   const isEmbedVideo = (url?: string | null) => {
     if (!url) return false;
@@ -99,7 +90,11 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
   };
 
   const hasBackgroundVideo = Boolean(
-    currentSlide?.videoUrl && canWatchCurrentSlideVideo && !isEmbedVideo(currentSlide.videoUrl)
+    currentSlide?.videoUrl && !isEmbedVideo(currentSlide.videoUrl)
+  );
+
+  const isCurrentSlideVideo = Boolean(
+    hasBackgroundVideo || currentSlide?.mediaType === 'video' || currentSlide?.videoUrl
   );
 
   // Auto-cycle through slides when enabled (pauses when user interacts or video is unmuted/playing)
@@ -373,41 +368,17 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
             </div>
           )}
 
-          {/* Right Zone: Category Filter Tabs & Admin Button */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 p-1 rounded-lg bg-[#050C17]/80 backdrop-blur-md border border-white/10">
-              {['All', 'Orientation Session', 'Featured Course', 'Highlight Recording'].map(
-                (tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => {
-                      setFilterCategory(tab);
-                      setActiveIndex(0);
-                    }}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-                      filterCategory === tab
-                        ? 'bg-teal-400 text-slate-950 font-semibold shadow-sm'
-                        : 'text-slate-200 hover:text-teal-300'
-                    }`}
-                  >
-                    {tab === 'All' ? 'All Media' : tab}
-                  </button>
-                )
-              )}
-            </div>
-
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={onOpenAdminSlides}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-[#050C17]/85 backdrop-blur-md border border-teal-400/50 text-teal-300 hover:bg-teal-500/20 transition-colors whitespace-nowrap"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Manage Slides &amp; Videos</span>
-              </button>
-            )}
-          </div>
+          {/* Right Zone: Admin Manage Slides & Videos Button */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={onOpenAdminSlides}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg bg-[#050C17]/85 backdrop-blur-md border border-teal-400/50 text-teal-300 hover:bg-teal-500/20 transition-colors whitespace-nowrap"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Manage Slides &amp; Videos</span>
+            </button>
+          )}
         </div>
 
         {/* MIDDLE / LOWER CONTENT:
@@ -456,43 +427,48 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
                     <button
                       type="button"
                       onClick={toggleMute}
-                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
+                      className={`group flex items-center gap-2.5 p-2 sm:px-3 sm:py-2.5 rounded-2xl border-2 transition-all shadow-2xl backdrop-blur-md whitespace-nowrap ${
                         isMuted
-                          ? 'bg-amber-400 text-slate-950 font-bold border-amber-300'
-                          : 'bg-white/10 hover:bg-white/20 text-white border-white/15'
+                          ? 'bg-amber-400 text-slate-950 font-bold border-amber-300 ring-4 ring-amber-400/40 animate-pulse hover:bg-amber-300'
+                          : 'bg-[#050C17]/90 text-teal-300 border-teal-500/50 hover:bg-[#050C17] hover:border-teal-300'
                       }`}
+                      title={isMuted ? 'Click Square to Unmute Voice & Play Video' : 'Mute Video Audio'}
                     >
-                      {isMuted ? (
-                        <>
-                          <VolumeX className="w-3.5 h-3.5 fill-slate-950" />
-                          <span>Unmute Voice</span>
-                        </>
-                      ) : (
-                        <>
-                          <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Mute Audio</span>
-                        </>
-                      )}
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-black/25 shrink-0 border border-white/10">
+                        {isMuted ? (
+                          <VolumeX className="w-6 h-6 fill-current stroke-[2.5]" />
+                        ) : (
+                          <Volume2 className="w-6 h-6 text-emerald-400 stroke-[2.5]" />
+                        )}
+                      </div>
+                      <div className="text-left pr-1">
+                        <div className="text-[11px] font-black uppercase tracking-wider">
+                          {isMuted ? 'Unmute Voice' : 'Audio Playing'}
+                        </div>
+                        <div className="text-[9px] text-slate-800 dark:text-slate-400 font-mono-tabular">
+                          {isMuted ? 'Click to Play Audio' : `${Math.round(volume * 100)}% Volume`}
+                        </div>
+                      </div>
                     </button>
 
                     <button
                       type="button"
                       onClick={toggleCleanView}
-                      className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium bg-[#050C17]/80 hover:bg-[#050C17] text-slate-300 border border-white/15 transition-colors whitespace-nowrap"
+                      className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-medium bg-[#050C17]/80 hover:bg-[#050C17] text-slate-300 border border-white/15 transition-colors whitespace-nowrap"
                       title="Hide text overlay to view pure video"
                     >
-                      <EyeOff className="w-3.5 h-3.5 text-teal-400" />
+                      <EyeOff className="w-4 h-4 text-teal-400" />
                       <span>Hide Text</span>
                     </button>
                   </div>
                 </div>
               ) : (
                 /* Ultra-Minimal Clean View Pill: Zero obstruction across the entire video */
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={toggleCleanView}
-                    className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#050C17]/85 hover:bg-[#050C17] backdrop-blur-md border border-teal-500/30 text-xs text-slate-200 hover:text-white transition-all shadow-lg"
+                    className="flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-[#050C17]/85 hover:bg-[#050C17] backdrop-blur-md border border-teal-500/30 text-xs text-slate-200 hover:text-white transition-all shadow-lg"
                     title="Click to expand video title and course info"
                   >
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -505,14 +481,24 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
                   <button
                     type="button"
                     onClick={toggleMute}
-                    className={`p-1.5 rounded-full backdrop-blur-md border transition-all ${
+                    className={`flex flex-col items-center justify-center w-14 h-14 rounded-2xl border-2 shadow-2xl backdrop-blur-md transition-all ${
                       isMuted
-                        ? 'bg-amber-400 text-slate-950 border-amber-300 animate-pulse'
-                        : 'bg-[#050C17]/85 text-teal-300 border-teal-500/30'
+                        ? 'bg-amber-400 text-slate-950 border-amber-300 ring-4 ring-amber-400/40 animate-pulse font-bold'
+                        : 'bg-[#050C17]/90 text-teal-300 border-teal-500/40'
                     }`}
-                    title={isMuted ? 'Unmute Voice' : 'Mute Voice'}
+                    title={isMuted ? 'Click Square to Unmute Voice & Play Video' : 'Mute Voice'}
                   >
-                    {isMuted ? <VolumeX className="w-3.5 h-3.5 fill-slate-950" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
+                    {isMuted ? (
+                      <>
+                        <VolumeX className="w-6 h-6 fill-current stroke-[2.5]" />
+                        <span className="text-[8px] font-black uppercase">Unmute</span>
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="w-6 h-6 text-emerald-400 stroke-[2.5]" />
+                        <span className="text-[8px] font-black uppercase text-emerald-400">Audio</span>
+                      </>
+                    )}
                   </button>
                 </div>
               )}
@@ -565,6 +551,80 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
           )
         )}
 
+        {/* Signature DEEN HIJRAH Watermark (Source Code Academia style) */}
+        {(hasBackgroundVideo || isCurrentSlideVideo) && (
+          <div className="absolute top-6 right-6 sm:right-10 z-20 pointer-events-none select-none flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#040A14]/80 backdrop-blur-md border border-amber-400/50 shadow-2xl">
+            <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 flex items-center justify-center shadow-sm">
+              <span className="text-[10px] font-black text-slate-950 leading-none">DH</span>
+            </div>
+            <div className="flex flex-col leading-tight text-left">
+              <span className="text-[10px] font-black tracking-widest text-amber-300 uppercase">
+                DEEN HIJRAH
+              </span>
+              <span className="text-[7px] font-bold tracking-widest text-teal-300 uppercase">
+                ACADEMIA
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Floating Prominent Square Unmute / Mute Voice Beacon Button on Video */}
+        {hasBackgroundVideo && (
+          <div className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 z-30 pointer-events-auto">
+            <button
+              type="button"
+              onClick={() => {
+                if (bgVideoRef.current) {
+                  if (isMuted) {
+                    bgVideoRef.current.muted = false;
+                    bgVideoRef.current.volume = volume > 0 ? volume : 0.85;
+                    setIsMuted(false);
+                    bgVideoRef.current
+                      .play()
+                      .then(() => setIsVideoPlaying(true))
+                      .catch(() => {});
+                    try {
+                      localStorage.setItem(STORAGE_KEYS.muted, 'false');
+                    } catch {}
+                  } else {
+                    bgVideoRef.current.muted = true;
+                    setIsMuted(true);
+                    try {
+                      localStorage.setItem(STORAGE_KEYS.muted, 'true');
+                    } catch {}
+                  }
+                }
+              }}
+              className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex flex-col items-center justify-center gap-1 border-2 shadow-2xl backdrop-blur-md transition-all hover:scale-105 active:scale-95 group ${
+                isMuted
+                  ? 'bg-amber-400 text-slate-950 border-amber-300 ring-4 ring-amber-400/50 animate-pulse font-bold'
+                  : 'bg-[#040B16]/90 text-teal-300 border-teal-400/60 ring-2 ring-teal-500/20'
+              }`}
+              title={
+                isMuted
+                  ? 'Click Square to Unmute Voice & Play Background Video'
+                  : 'Audio Active (Click to Mute)'
+              }
+            >
+              {isMuted ? (
+                <>
+                  <VolumeX className="w-7 h-7 sm:w-8 sm:h-8 fill-current stroke-[2.5]" />
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider">
+                    Unmute
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-400 stroke-[2.5]" />
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                    Voice On
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
         {/* Empty State if Admin Deleted All Slides */}
         {!currentSlide && (
           <div className="my-auto py-12 max-w-xl">
@@ -592,82 +652,94 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
           </div>
         )}
 
-        {/* Bottom Full-Width Filmstrip Dock */}
+        {/* Bottom Full-Width Controls: When video plays, the little boxes down below are removed, keeping only the clean slide navigation arrows */}
         {activeSlides.length > 0 && (
-          <div className="pt-3 border-t border-white/15 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            {/* Horizontal Slide Thumbnails */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1">
-              {activeSlides.map((slide, idx) => {
-                const isSelected = idx === activeIndex % activeSlides.length;
-                const isSlideVideo = slide.mediaType === 'video' || Boolean(slide.videoUrl);
+          <div
+            className={`pt-3 flex items-center justify-between gap-4 ${
+              isCurrentSlideVideo ? 'border-t-0' : 'border-t border-white/15 flex-col lg:flex-row'
+            }`}
+          >
+            {/* Horizontal Slide Thumbnails - Completely hidden when video is playing/active */}
+            {!isCurrentSlideVideo && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1">
+                {activeSlides.map((slide, idx) => {
+                  const isSelected = idx === activeIndex % activeSlides.length;
+                  const isSlideVideo = slide.mediaType === 'video' || Boolean(slide.videoUrl);
 
-                return (
-                  <button
-                    key={slide.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveIndex(idx);
-                    }}
-                    className={`text-left flex items-center gap-3 p-2.5 rounded-xl backdrop-blur-md transition-all border ${
-                      isSelected
-                        ? 'bg-[#050C17]/90 border-teal-400 shadow-lg'
-                        : 'bg-[#050C17]/60 border-white/10 hover:bg-[#050C17]/80 hover:border-white/25'
-                    }`}
-                  >
-                    <div className="relative w-20 h-12 rounded-lg overflow-hidden shrink-0 bg-slate-900 border border-white/10">
-                      <img
-                        src={resolveThumbnailUrl(slide.thumbnailUrl)}
-                        alt={slide.title}
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = ACADEMY_ASSETS.courseSeerah;
-                        }}
-                        className="w-full h-full object-cover"
-                      />
-                      {isSlideVideo && (
-                        <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
-                          <Film className="w-3.5 h-3.5 text-teal-300" />
+                  return (
+                    <button
+                      key={slide.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveIndex(idx);
+                      }}
+                      className={`text-left flex items-center gap-3 p-2.5 rounded-xl backdrop-blur-md transition-all border ${
+                        isSelected
+                          ? 'bg-[#050C17]/90 border-teal-400 shadow-lg'
+                          : 'bg-[#050C17]/60 border-white/10 hover:bg-[#050C17]/80 hover:border-white/25'
+                      }`}
+                    >
+                      <div className="relative w-20 h-12 rounded-lg overflow-hidden shrink-0 bg-slate-900 border border-white/10">
+                        <img
+                          src={resolveThumbnailUrl(slide.thumbnailUrl)}
+                          alt={slide.title}
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = ACADEMY_ASSETS.courseSeerah;
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                        {isSlideVideo && (
+                          <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
+                            <Film className="w-3.5 h-3.5 text-teal-300" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[11px] font-medium text-teal-300 truncate">
+                          {slide.badgeText}
                         </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[11px] font-medium text-teal-300 truncate">
-                        {slide.badgeText}
+                        <div className="text-xs font-semibold text-white truncate mt-0.5">
+                          {slide.title}
+                        </div>
                       </div>
-                      <div className="text-xs font-semibold text-white truncate mt-0.5">
-                        {slide.title}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
-            {/* Background Slideshow Transport Controls */}
-            <div className="flex items-center gap-2 shrink-0 self-end lg:self-center">
-              <button
-                type="button"
-                onClick={() => setIsAutoPlaying(!isAutoPlaying)}
-                className="p-2.5 rounded-lg bg-[#050C17]/80 hover:bg-[#050C17] text-slate-200 border border-white/15 backdrop-blur-md"
-                title={isAutoPlaying ? 'Pause Slide Cycling' : 'Resume Slide Cycling'}
-              >
-                {isAutoPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              </button>
+            {/* Slide Navigation Arrows - Always cleanly accessible */}
+            <div
+              className={`flex items-center gap-2 shrink-0 ${
+                isCurrentSlideVideo ? 'ml-auto' : 'self-end lg:self-center'
+              }`}
+            >
+              {!isCurrentSlideVideo && (
+                <button
+                  type="button"
+                  onClick={() => setIsAutoPlaying(!isAutoPlaying)}
+                  className="p-2.5 rounded-xl bg-[#050C17]/80 hover:bg-[#050C17] text-slate-200 border border-white/15 backdrop-blur-md"
+                  title={isAutoPlaying ? 'Pause Slide Cycling' : 'Resume Slide Cycling'}
+                >
+                  {isAutoPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handlePrev}
-                className="p-2.5 rounded-lg bg-[#050C17]/80 hover:bg-[#050C17] text-slate-200 border border-white/15 backdrop-blur-md"
+                className="flex items-center justify-center p-3 rounded-xl bg-[#040B16]/85 hover:bg-[#040B16] text-white border border-teal-500/40 hover:border-teal-300 backdrop-blur-md shadow-xl transition-all hover:scale-105"
                 title="Previous Slide"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-5 h-5" />
               </button>
               <button
                 type="button"
                 onClick={handleNext}
-                className="p-2.5 rounded-lg bg-[#050C17]/80 hover:bg-[#050C17] text-slate-200 border border-white/15 backdrop-blur-md"
+                className="flex items-center justify-center p-3 rounded-xl bg-[#040B16]/85 hover:bg-[#040B16] text-white border border-teal-500/40 hover:border-teal-300 backdrop-blur-md shadow-xl transition-all hover:scale-105"
                 title="Next Slide"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-5 h-5" />
               </button>
             </div>
           </div>

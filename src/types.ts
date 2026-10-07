@@ -41,7 +41,37 @@ export interface Course {
   classDays?: string | null;
   classStartTime?: string | null;
   classTimezone?: string | null;
+  enrollmentStatus?: 'open' | 'coming_soon' | 'live';
+  tags?: string | string[] | null; // JSON stringified string[] or string[] e.g. ["Live", "Open for Enrollment", "Weekend Cohort"]
   createdAt?: string;
+}
+
+export function parseCourseTags(course: Partial<Course> | null | undefined): string[] {
+  if (!course) return [];
+  if (Array.isArray(course.tags)) {
+    return course.tags.filter(Boolean);
+  }
+  if (typeof course.tags === 'string' && course.tags.trim()) {
+    try {
+      const parsed = JSON.parse(course.tags);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(Boolean);
+      }
+    } catch {
+      // Comma-separated fallback
+      return course.tags.split(',').map((t) => t.trim()).filter(Boolean);
+    }
+  }
+  // Default fallback derived from enrollmentStatus
+  const fallbackTags: string[] = [];
+  if (course.enrollmentStatus === 'live') {
+    fallbackTags.push('Live Cohort');
+  } else if (course.enrollmentStatus === 'coming_soon') {
+    fallbackTags.push('Coming Soon');
+  } else {
+    fallbackTags.push('Open for Enrollment');
+  }
+  return fallbackTags;
 }
 
 export interface Lesson {

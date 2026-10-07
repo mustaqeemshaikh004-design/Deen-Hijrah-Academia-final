@@ -203,6 +203,8 @@ function createDefaultStoreState(): PortalStoreState {
         'Academic Expectations: Students attend two weekly live Zoom classes (automatically displayed in your local country timezone), complete the primary source readings, and submit module homework assignments for faculty review by Ustadh Mustaqeem Shaikh.',
       syllabusBoxes: SEERAH_SYLLABUS_BOXES,
       syllabusFileUrl: null,
+      enrollmentStatus: 'open',
+      tags: JSON.stringify(['Open for Enrollment', 'Live Cohort', 'Orientations Free', 'Flagship Program']),
       createdAt: nowIso,
     },
     {
@@ -230,6 +232,8 @@ function createDefaultStoreState(): PortalStoreState {
         'Linguistic Immersion Protocol: Weekly morphological drills, live syntactic parsing on Zoom, and written homework submissions graded directly by faculty.',
       syllabusBoxes: ARABIC_SYLLABUS_BOXES,
       syllabusFileUrl: null,
+      enrollmentStatus: 'open',
+      tags: JSON.stringify(['Open for Enrollment', 'Live Cohort', 'Linguistic Intensive']),
       createdAt: nowIso,
     },
     {
@@ -257,6 +261,8 @@ function createDefaultStoreState(): PortalStoreState {
         'Foundational Jurisprudence & Ethics Syllabus: Combines classical Usul al-Fiqh treatise readings with practical ethical case studies and weekly homework reflections.',
       syllabusBoxes: USUL_SYLLABUS_BOXES,
       syllabusFileUrl: null,
+      enrollmentStatus: 'open',
+      tags: JSON.stringify(['Open for Enrollment', 'Ethics & Tazkiyah', 'Weekend Intensive']),
       createdAt: nowIso,
     },
   ];
@@ -1200,6 +1206,12 @@ export async function handleLocalFallbackRequest(
       classDays: body.classDays ? String(body.classDays) : 'Saturday & Wednesday',
       classStartTime: body.classStartTime ? String(body.classStartTime) : '14:00',
       classTimezone: body.classTimezone ? String(body.classTimezone) : 'America/New_York',
+      enrollmentStatus: body.enrollmentStatus ? (body.enrollmentStatus as any) : 'open',
+      tags: Array.isArray(body.tags)
+        ? JSON.stringify(body.tags)
+        : typeof body.tags === 'string'
+        ? body.tags
+        : '["Open for Enrollment"]',
       createdAt: new Date().toISOString(),
     };
     store.courses.push(created);
@@ -1218,6 +1230,11 @@ export async function handleLocalFallbackRequest(
         syllabusBoxes: Array.isArray(body.syllabusBoxes)
           ? JSON.stringify(body.syllabusBoxes)
           : body.syllabusBoxes ?? store.courses[idx].syllabusBoxes,
+        tags: Array.isArray(body.tags)
+          ? JSON.stringify(body.tags)
+          : body.tags !== undefined
+          ? (typeof body.tags === 'string' ? body.tags : JSON.stringify(body.tags))
+          : store.courses[idx].tags,
       };
       store.courses[idx] = updated;
       saveStore(store);

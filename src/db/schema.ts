@@ -35,6 +35,7 @@ export const courses = pgTable('courses', {
   classDays: text('class_days').default('Saturday & Wednesday'),
   classStartTime: text('class_start_time').default('14:00'), // 24h HH:mm in sourceTimezone
   classTimezone: text('class_timezone').default('America/New_York'),
+  enrollmentStatus: text('enrollment_status').default('open'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

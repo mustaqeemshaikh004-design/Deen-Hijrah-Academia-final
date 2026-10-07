@@ -119,11 +119,66 @@ let globalCalendarSettings = {
   updatedBy: 'Academy Administration',
 };
 
+function formatCourseWithTags(c: any) {
+  if (!c) return c;
+  const status = c.enrollmentStatus || 'open';
+  let tags: string[] = [];
+  let cleanStatus = 'open';
+  if (typeof status === 'string' && status.includes('::tags:')) {
+    const parts = status.split('::tags:');
+    cleanStatus = parts[0] || 'open';
+    try {
+      tags = JSON.parse(parts[1]);
+    } catch {
+      tags = [];
+    }
+  } else {
+    cleanStatus = status;
+    if (status === 'live') tags = ['Live Cohort', 'Open for Enrollment'];
+    else if (status === 'coming_soon') tags = ['Coming Soon'];
+    else tags = ['Open for Enrollment'];
+  }
+  return {
+    ...c,
+    enrollmentStatus: cleanStatus,
+    tags: Array.isArray(tags) && tags.length > 0 ? tags : ['Open for Enrollment'],
+  };
+}
+
+function encodeTagsInStatus(enrollmentStatus?: string | null, tagsInput?: any): string {
+  const baseRaw = enrollmentStatus ? String(enrollmentStatus) : 'open';
+  const base = baseRaw.includes('::tags:') ? baseRaw.split('::tags:')[0] : baseRaw;
+  const cleanBase = base === 'live' || base === 'coming_soon' || base === 'open' ? base : 'open';
+
+  let finalTags: string[] = [];
+  if (Array.isArray(tagsInput)) {
+    finalTags = tagsInput.filter(Boolean).map(String);
+  } else if (typeof tagsInput === 'string' && tagsInput.trim()) {
+    try {
+      const parsed = JSON.parse(tagsInput);
+      if (Array.isArray(parsed)) finalTags = parsed.filter(Boolean).map(String);
+      else finalTags = [tagsInput.trim()];
+    } catch {
+      finalTags = tagsInput.split(',').map((t) => t.trim()).filter(Boolean);
+    }
+  }
+  if (finalTags.length === 0) {
+    if (cleanBase === 'live') finalTags = ['Live Cohort'];
+    else if (cleanBase === 'coming_soon') finalTags = ['Coming Soon'];
+    else finalTags = ['Open for Enrollment'];
+  }
+  return `${cleanBase}::tags:${JSON.stringify(finalTags)}`;
+}
+
 // Public endpoint to load portal courses, lessons, public events, homepage media slides, and faculty list
 app.get('/api/portal-data', async (_req, res) => {
   try {
     if (!initialSeedChecked) {
-      await ensureInitialAcademySetup(false);
+      try {
+        await ensureInitialAcademySetup(false);
+      } catch (setupErr) {
+        console.warn('Initial setup check warning:', setupErr);
+      }
       initialSeedChecked = true;
     }
 
@@ -146,7 +201,7 @@ app.get('/api/portal-data', async (_req, res) => {
     }));
 
     res.json({
-      courses: coursesList,
+      courses: coursesList.map(formatCourseWithTags),
       lessons: lessonsList,
       events: eventsList,
       slides: slidesList,
@@ -845,8 +900,9 @@ app.post('/api/admin/courses', requireAuth, requireAdmin, async (req: AuthReques
       classDays: classDays ? String(classDays) : 'Saturday & Wednesday',
       classStartTime: classStartTime ? String(classStartTime) : '14:00',
       classTimezone: classTimezone ? String(classTimezone) : 'America/New_York',
+      enrollmentStatus: encodeTagsInStatus(req.body.enrollmentStatus, req.body.tags),
     });
-    res.json(created);
+    res.json(formatCourseWithTags(created));
   } catch (error: any) {
     console.error('Failed to create course:', error);
     res.status(500).json({ error: error.message || 'Failed to create course' });
@@ -872,8 +928,17 @@ app.put('/api/admin/courses/:id', requireAuth, requireAdmin, async (req: AuthReq
     if (Array.isArray(bodyData.syllabusBoxes)) {
       bodyData.syllabusBoxes = JSON.stringify(bodyData.syllabusBoxes);
     }
+    if (bodyData.tags !== undefined || bodyData.enrollmentStatus !== undefined) {
+      bodyData.enrollmentStatus = encodeTagsInStatus(bodyData.enrollmentStatus, bodyData.tags);
+    }
+    delete bodyData.tags;
+    // Delete read-only properties so Drizzle update never fails
+    delete bodyData.id;
+    delete bodyData.createdAt;
+    delete bodyData.created_at;
+
     const updated = await updateCourse(courseId, bodyData);
-    res.json(updated);
+    res.json(formatCourseWithTags(updated));
   } catch (error: any) {
     console.error('Failed to update course:', error);
     res.status(500).json({ error: error.message || 'Failed to update course' });
