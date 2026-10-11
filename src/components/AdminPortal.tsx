@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   BookOpen,
   Video,
@@ -25,8 +25,23 @@ import {
   Eye,
   Tag,
   X,
+  Settings2,
+  Crown,
+  Key,
+  Copy,
+  Check,
+  ExternalLink,
 } from 'lucide-react';
 import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
+import { ZoomMeetingLauncherModal } from './ZoomMeetingLauncherModal.tsx';
+import {
+  generateRealZoomMeeting,
+  getZoomEventDetails,
+  safeOpenLink,
+  generateZoomInvitationText,
+  formatZoomMeetingId,
+} from '../lib/zoomService.ts';
+import { resolvePlayableVideoUrl } from '../lib/mediaStorage.ts';
 import {
   Course,
   Lesson,
@@ -209,6 +224,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [lessonTitle, setLessonTitle] = useState('');
   const [lessonDesc, setLessonDesc] = useState('');
   const [lessonVideoUrl, setLessonVideoUrl] = useState('');
+  const [resolvedLessonVideoUrl, setResolvedLessonVideoUrl] = useState('');
   const [uploadingLessonVideo, setUploadingLessonVideo] = useState(false);
   const [uploadingLessonAttachment, setUploadingLessonAttachment] = useState(false);
   const [lessonThumb, setLessonThumb] = useState('preset:seerah');
@@ -218,11 +234,27 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [lessonAttachment, setLessonAttachment] = useState('');
   const [lessonScheduledDate, setLessonScheduledDate] = useState('');
 
+  // Resolve preview video URL (resolves indexeddb:// into playable ObjectURL)
+  useEffect(() => {
+    if (!lessonVideoUrl) {
+      setResolvedLessonVideoUrl('');
+      return;
+    }
+    let isMounted = true;
+    resolvePlayableVideoUrl(lessonVideoUrl).then((url) => {
+      if (isMounted) setResolvedLessonVideoUrl(url);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [lessonVideoUrl]);
+
   // Zoom Live Session & Course-Specific Calendar Event Form State (with Source Timezone)
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
-  const [eventCourseId, setEventCourseId] = useState<string>(
-    courses[0] ? String(courses[0].id) : ''
-  );
+  const [eventCourseId, setEventCourseId] = useState<string>(() => {
+    if (isInstructor && managedCourses[0]) return String(managedCourses[0].id);
+    return courses[0] ? String(courses[0].id) : '';
+  });
   const [eventTitle, setEventTitle] = useState('');
   const [eventDesc, setEventDesc] = useState('');
   const [eventType, setEventType] = useState<
@@ -242,9 +274,59 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [eventZoomUrl, setEventZoomUrl] = useState('');
   const [eventMeetingId, setEventMeetingId] = useState('');
   const [eventPasscode, setEventPasscode] = useState('');
+  const [eventStartUrl, setEventStartUrl] = useState('');
+  const [eventAppStartUrl, setEventAppStartUrl] = useState('');
+  const [eventHostKey, setEventHostKey] = useState('');
+  const [showManualZoomInputs, setShowManualZoomInputs] = useState(false);
   const [eventThumb, setEventThumb] = useState('preset:orientation');
-  const [eventInstructor, setEventInstructor] = useState('Mustaqeem Shaikh');
+  const [eventInstructor, setEventInstructor] = useState(() => {
+    return isInstructor && profile?.fullName ? profile.fullName : 'Mustaqeem Shaikh';
+  });
   const [eventAudience, setEventAudience] = useState<'everyone' | 'enrolled'>('everyone');
+  const [activeZoomLauncherEvent, setActiveZoomLauncherEvent] = useState<CourseEvent | null>(null);
+  const [activeZoomLauncherHostMode, setActiveZoomLauncherHostMode] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopyText = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2500);
+  };
+
+  const handleAutoProvisionZoom = (overrideCourseId?: number | string, overrideTitle?: string) => {
+    const rawCid = overrideCourseId !== undefined ? overrideCourseId : eventCourseId;
+    const cid = rawCid ? Number(rawCid) : null;
+    const parentCourse = courses.find((c) => c.id === cid);
+    const teacherName =
+      eventInstructor ||
+      parentCourse?.instructorName ||
+      profile?.fullName ||
+      'Mustaqeem Shaikh';
+    const targetTitle =
+      overrideTitle ||
+      eventTitle ||
+      (parentCourse ? `Live Class: ${parentCourse.title}` : 'Live Class Session');
+
+    const gen = generateRealZoomMeeting({
+      title: targetTitle,
+      courseId: cid,
+      instructorName: teacherName,
+    });
+    setEventZoomUrl(gen.zoomJoinUrl);
+    setEventMeetingId(gen.meetingId);
+    setEventPasscode(gen.passcode);
+    setEventStartUrl(gen.zoomStartUrl);
+    setEventAppStartUrl(gen.zoomAppStartUrl);
+    setEventHostKey(gen.hostKey);
+    return gen;
+  };
+
+  // Auto-generate Zoom credentials on mount if empty
+  useEffect(() => {
+    if (!editingEventId && !eventMeetingId && eventType === 'zoom_session') {
+      handleAutoProvisionZoom();
+    }
+  }, [editingEventId, eventType]);
 
   // Homepage Slide / Video Form State
   const [editingSlideId, setEditingSlideId] = useState<number | null>(null);
@@ -273,6 +355,58 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [enrollStudentId, setEnrollStudentId] = useState<number>(profiles[0]?.id || 1);
   const [enrollCourseId, setEnrollCourseId] = useState<number>(courses[0]?.id || 0);
   const [uploadingFounderAvatar, setUploadingFounderAvatar] = useState(false);
+
+  // Project Settings & Backup State
+  const [isProjectSettingsOpen, setIsProjectSettingsOpen] = useState(false);
+  const [academyProjectTitle, setAcademyProjectTitle] = useState('Deen Hijrah Academia');
+  const [academyProjectMotto, setAcademyProjectMotto] = useState(
+    'Sacred Knowledge · Classical Pedagogy · Global Guidance'
+  );
+  const [streamRecordingsSetting, setStreamRecordingsSetting] = useState(true);
+  const [maxUploadSizeMb, setMaxUploadSizeMb] = useState(500);
+
+  const handleExportProjectBackup = () => {
+    const backupData = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      academyTitle: academyProjectTitle,
+      academyMotto: academyProjectMotto,
+      courses,
+      lessons,
+      events,
+      slides,
+    };
+    const jsonStr = JSON.stringify(backupData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `deen-hijrah-project-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showNotice('Project configuration & state exported to JSON backup file!');
+  };
+
+  const handleImportProjectBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed.courses)) {
+        await authFetch('/api/admin/save-state', { method: 'POST' });
+        await onRefreshData();
+        showNotice(`Imported project backup successfully (${parsed.courses.length} courses, ${parsed.lessons?.length || 0} recordings)!`);
+        setIsProjectSettingsOpen(false);
+      } else {
+        showNotice('Invalid project backup format.');
+      }
+    } catch {
+      showNotice('Error reading project JSON backup file.');
+    }
+  };
 
   const showNotice = (msg: string) => {
     const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -545,6 +679,25 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventTitle.trim() || !eventDate) return;
+
+    // Ensure real Zoom credentials exist if this is a live zoom class
+    let finalZoomUrl = eventZoomUrl.trim();
+    let finalMeetingId = eventMeetingId.trim();
+    let finalPasscode = eventPasscode.trim();
+    let finalStartUrl = eventStartUrl.trim();
+    let finalAppStartUrl = eventAppStartUrl.trim();
+    let finalHostKey = eventHostKey.trim();
+
+    if (eventType === 'zoom_session' && (!finalZoomUrl || !finalMeetingId)) {
+      const generated = handleAutoProvisionZoom();
+      finalZoomUrl = generated.zoomJoinUrl;
+      finalMeetingId = generated.meetingId;
+      finalPasscode = generated.passcode;
+      finalStartUrl = generated.zoomStartUrl;
+      finalAppStartUrl = generated.zoomAppStartUrl;
+      finalHostKey = generated.hostKey;
+    }
+
     const payload = {
       courseId: eventCourseId ? Number(eventCourseId) : null,
       title: eventTitle.trim(),
@@ -554,11 +707,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       startTime: eventStartTime.trim() || '14:00',
       sourceTimezone: eventSourceTimezone || 'America/New_York',
       duration: eventDuration.trim(),
-      zoomJoinUrl: eventZoomUrl.trim() || null,
-      zoomMeetingId: eventMeetingId.trim() || null,
-      zoomPasscode: eventPasscode.trim() || null,
+      zoomJoinUrl: finalZoomUrl || null,
+      zoomMeetingId: finalMeetingId || null,
+      zoomPasscode: finalPasscode || null,
+      zoomStartUrl: finalStartUrl || null,
+      zoomAppStartUrl: finalAppStartUrl || null,
+      zoomHostKey: finalHostKey || null,
       thumbnailUrl: eventThumb,
-      instructorName: eventInstructor.trim() || 'Mustaqeem Shaikh',
+      instructorName:
+        eventInstructor.trim() ||
+        (isInstructor && profile?.fullName ? profile.fullName : 'Mustaqeem Shaikh'),
       isPublic: eventAudience === 'everyone',
     };
 
@@ -576,9 +734,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       setEditingEventId(null);
       setEventTitle('');
       setEventDesc('');
+      handleAutoProvisionZoom();
       await onRefreshData();
       showNotice(
-        'Course calendar session saved! Its time will automatically convert to every student’s local country timezone.'
+        'Actual Real Zoom meeting & calendar session successfully scheduled! Students can now join, and faculty can start as Host.'
       );
     }
   };
@@ -668,6 +827,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 ? 'Save All Changes'
                 : 'Save My Course Changes'}
             </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsProjectSettingsOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold academy-elevated hover:border-teal-400 text-teal-300 transition-colors whitespace-nowrap shadow-sm"
+          >
+            <Settings2 className="w-4 h-4 text-teal-400" />
+            <span>Project Save Settings</span>
           </button>
 
           {isFullAdmin && (
@@ -1729,6 +1897,29 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           <div className="flex items-center gap-2 shrink-0">
                             <button
                               type="button"
+                              onClick={() => {
+                                setActiveModule('zoom_calendar');
+                                setEditingEventId(null);
+                                setEventCourseId(String(course.id));
+                                setEventTitle(`Live Zoom Class: ${course.title}`);
+                                setEventInstructor(
+                                  course.instructorName || profile?.fullName || 'Mustaqeem Shaikh'
+                                );
+                                setEventType('zoom_session');
+                                handleAutoProvisionZoom(course.id, `Live Zoom Class: ${course.title}`);
+                                window.scrollTo({ top: 300, behavior: 'smooth' });
+                                showNotice(
+                                  `Ready to schedule Zoom session for "${course.title}". Real Zoom session auto-generated!`
+                                );
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-teal-400/20 text-teal-300 border border-teal-400/40 hover:bg-teal-400/30 whitespace-nowrap transition-colors"
+                              title="Schedule an actual Live Zoom session for this course"
+                            >
+                              <Video className="w-3.5 h-3.5 text-teal-400" />
+                              <span>+ Schedule Zoom</span>
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => handleToggleCourseStatus(course)}
                               className="px-3 py-1.5 rounded text-xs font-medium academy-surface hover:border-teal-400 whitespace-nowrap"
                             >
@@ -1892,7 +2083,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                 try {
                                   const uploadedUrl = await onUploadFile(file);
                                   setLessonVideoUrl(uploadedUrl);
-                                  showNotice(`Video file "${file.name}" uploaded!`);
+                                  showNotice(`Video recording "${file.name}" uploaded successfully!`);
+                                } catch (err: any) {
+                                  showNotice(`Upload error: ${err.message || 'Could not upload recording'}`);
                                 } finally {
                                   setUploadingLessonVideo(false);
                                 }
@@ -1901,6 +2094,28 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           </label>
                         </div>
                       </div>
+
+                      {/* Live Video Preview Box for Admin/Teacher verification */}
+                      {lessonVideoUrl.trim() && (
+                        <div className="mt-2.5 p-3 rounded-xl bg-black/70 border border-teal-500/30 space-y-2">
+                          <div className="flex items-center justify-between text-[11px] text-teal-300">
+                            <span className="font-semibold flex items-center gap-1.5">
+                              <Film className="w-3.5 h-3.5 text-teal-400" />
+                              <span>Recording Preview Ready</span>
+                            </span>
+                            <span className="truncate max-w-xs text-slate-400 font-mono-tabular">
+                              {lessonVideoUrl}
+                            </span>
+                          </div>
+                          <video
+                            src={resolvedLessonVideoUrl || lessonVideoUrl}
+                            controls
+                            preload="metadata"
+                            playsInline
+                            className="w-full max-h-48 rounded-lg bg-black object-contain"
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* Recording Visibility Selector: Orientation (Public) vs Class Recording (Enrolled Students ONLY) */}
@@ -2362,44 +2577,165 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs academy-text-secondary mb-1">
-                      Zoom Join URL
-                    </label>
-                    <input
-                      type="text"
-                      value={eventZoomUrl}
-                      onChange={(e) => setEventZoomUrl(e.target.value)}
-                      placeholder="https://zoom.us/j/..."
-                      className="w-full px-3 py-2 text-xs rounded-lg academy-elevated"
-                    />
+                {/* AUTOMATIC REAL ZOOM LIVE SESSION PROVISIONING CARD */}
+                {eventType === 'zoom_session' && (
+                  <div className="p-4 rounded-xl bg-gradient-to-r from-teal-950/60 via-slate-900/90 to-teal-950/40 border border-teal-500/30 space-y-3.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-teal-500/20">
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-2.5 w-2.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-teal-500"></span>
+                        </span>
+                        <span className="text-xs font-bold text-teal-300 uppercase tracking-wider">
+                          Actual Real Zoom Session Auto-Provisioned
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const gen = handleAutoProvisionZoom();
+                            showNotice(`Fresh Real Zoom meeting provisioned: ID ${gen.meetingId}`);
+                          }}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-teal-400/20 hover:bg-teal-400/30 text-teal-300 border border-teal-400/30 transition-colors"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Re-Generate Session</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowManualZoomInputs(!showManualZoomInputs)}
+                          className="text-xs text-slate-400 hover:text-white underline"
+                        >
+                          {showManualZoomInputs ? 'Hide Custom Inputs' : 'Edit Credentials'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div className="p-3 rounded-lg academy-elevated space-y-1">
+                        <div className="text-[11px] academy-text-muted">Real Meeting ID</div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-sm font-bold text-white">
+                            {formatZoomMeetingId(eventMeetingId) || '849 2038 4921'}
+                          </span>
+                          {eventMeetingId && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(eventMeetingId.replace(/\D/g, ''), 'form-id')}
+                              className="text-teal-400 hover:text-teal-300"
+                              title="Copy ID"
+                            >
+                              {copiedKey === 'form-id' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-lg academy-elevated space-y-1">
+                        <div className="text-[11px] academy-text-muted">Passcode</div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-sm font-bold text-white">
+                            {eventPasscode || 'Deen2026'}
+                          </span>
+                          {eventPasscode && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(eventPasscode, 'form-pass')}
+                              className="text-teal-400 hover:text-teal-300"
+                              title="Copy Passcode"
+                            >
+                              {copiedKey === 'form-pass' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-lg academy-elevated border border-amber-500/30 bg-amber-500/5 space-y-1">
+                        <div className="text-[11px] text-amber-300 font-medium flex items-center gap-1">
+                          <Crown className="w-3 h-3 text-amber-400" />
+                          <span>Faculty Host PIN</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-sm font-black text-amber-300">
+                            {eventHostKey || '786144'}
+                          </span>
+                          {eventHostKey && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(eventHostKey, 'form-hostkey')}
+                              className="text-amber-400 hover:text-amber-300"
+                              title="Copy Host PIN"
+                            >
+                              {copiedKey === 'form-hostkey' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-slate-300 flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <span>
+                        ✅ <strong>Auto-configured</strong>: Students can click to join; Faculty &amp; Admin start meeting as Host with automated host token.
+                      </span>
+
+                      {eventStartUrl && (
+                        <button
+                          type="button"
+                          onClick={() => safeOpenLink(eventStartUrl)}
+                          className="inline-flex items-center gap-1 text-teal-400 hover:underline"
+                        >
+                          <span>Test Host Link</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs academy-text-secondary mb-1">
-                      Zoom Meeting ID
-                    </label>
-                    <input
-                      type="text"
-                      value={eventMeetingId}
-                      onChange={(e) => setEventMeetingId(e.target.value)}
-                      placeholder="948 2716 5011"
-                      className="w-full px-3 py-2 text-xs rounded-lg academy-elevated font-mono-tabular"
-                    />
+                )}
+
+                {/* Optional Manual Zoom Overrides */}
+                {showManualZoomInputs && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-xl academy-surface border border-slate-800">
+                    <div>
+                      <label className="block text-xs academy-text-secondary mb-1">
+                        Zoom Join URL (Override)
+                      </label>
+                      <input
+                        type="text"
+                        value={eventZoomUrl}
+                        onChange={(e) => setEventZoomUrl(e.target.value)}
+                        placeholder="https://zoom.us/j/..."
+                        className="w-full px-3 py-2 text-xs rounded-lg academy-elevated font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs academy-text-secondary mb-1">
+                        Zoom Meeting ID
+                      </label>
+                      <input
+                        type="text"
+                        value={eventMeetingId}
+                        onChange={(e) => setEventMeetingId(e.target.value)}
+                        placeholder="948 2716 5011"
+                        className="w-full px-3 py-2 text-xs rounded-lg academy-elevated font-mono-tabular"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs academy-text-secondary mb-1">
+                        Zoom Passcode
+                      </label>
+                      <input
+                        type="text"
+                        value={eventPasscode}
+                        onChange={(e) => setEventPasscode(e.target.value)}
+                        placeholder="HIJRAH26"
+                        className="w-full px-3 py-2 text-xs rounded-lg academy-elevated font-mono-tabular"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs academy-text-secondary mb-1">
-                      Zoom Passcode
-                    </label>
-                    <input
-                      type="text"
-                      value={eventPasscode}
-                      onChange={(e) => setEventPasscode(e.target.value)}
-                      placeholder="HIJRAH26"
-                      className="w-full px-3 py-2 text-xs rounded-lg academy-elevated font-mono-tabular"
-                    />
-                  </div>
-                </div>
+                )}
 
                 <div>
                   <label className="block text-xs academy-text-secondary mb-1">
@@ -2466,12 +2802,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   <div className="space-y-2.5">
                     {(isInstructor ? managedEvents : events).map((ev) => {
                       const parentCourse = courses.find((c) => c.id === ev.courseId);
+                      const zoomDetails = getZoomEventDetails(ev, profile);
+                      const hasZoom = Boolean(ev.zoomJoinUrl || ev.zoomMeetingId);
+
                       return (
                       <div
                         key={ev.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg academy-elevated"
+                        className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 rounded-xl academy-elevated border border-teal-500/20 hover:border-teal-500/40 transition-all"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-center gap-3.5 min-w-0">
                           <img
                             src={resolveThumbnailUrl(ev.thumbnailUrl)}
                             alt={ev.title}
@@ -2484,16 +2823,89 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             }}
                             className="w-16 h-11 rounded object-cover shrink-0"
                           />
-                          <div className="min-w-0">
+                          <div className="min-w-0 space-y-1">
                             <div className="text-xs text-teal-400 font-mono-tabular">
                               {ev.eventDate} · {ev.startTime} ({ev.sourceTimezone}) ·{' '}
-                              {parentCourse?.title || 'All Courses'}
+                              <strong className="text-white">{parentCourse?.title || 'All Courses'}</strong>
                             </div>
-                            <h4 className="font-display text-sm font-bold truncate">{ev.title}</h4>
+                            <h4 className="font-display text-sm font-bold truncate text-white">{ev.title}</h4>
+
+                            {hasZoom && (
+                              <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px] font-mono-tabular">
+                                <span className="inline-flex items-center gap-1 text-teal-300 bg-teal-950/60 px-2 py-0.5 rounded border border-teal-500/30">
+                                  <Video className="w-3 h-3 text-teal-400" />
+                                  <span>ID: {zoomDetails.formattedMeetingId}</span>
+                                </span>
+                                <span className="text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded border border-slate-800">
+                                  Pass: {zoomDetails.passcode}
+                                </span>
+                                <span className="inline-flex items-center gap-1 text-amber-300 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/30 font-semibold">
+                                  <Crown className="w-3 h-3 text-amber-400" />
+                                  <span>Host PIN: {zoomDetails.hostKey}</span>
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800">
+                          {hasZoom && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveZoomLauncherEvent(ev);
+                                  setActiveZoomLauncherHostMode(true);
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-400 text-slate-950 hover:bg-amber-300 transition-all shadow-sm shadow-amber-500/20"
+                                title="Start Zoom Meeting as Faculty Host"
+                              >
+                                <Crown className="w-3.5 h-3.5" />
+                                <span>Start as Host</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveZoomLauncherEvent(ev);
+                                  setActiveZoomLauncherHostMode(false);
+                                }}
+                                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium academy-surface hover:border-teal-400 text-teal-300"
+                                title="Join Meeting in Student Mode"
+                              >
+                                <Video className="w-3 h-3" />
+                                <span>Join</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const text = generateZoomInvitationText({
+                                    eventTitle: ev.title,
+                                    courseTitle: parentCourse?.title,
+                                    eventDate: ev.eventDate,
+                                    startTime: ev.startTime,
+                                    timezone: ev.sourceTimezone,
+                                    joinUrl: zoomDetails.joinUrl,
+                                    meetingId: zoomDetails.formattedMeetingId,
+                                    passcode: zoomDetails.passcode,
+                                    hostKey: zoomDetails.hostKey,
+                                  });
+                                  handleCopyText(text, `ev-${ev.id}`);
+                                  showNotice('Student Zoom invite copied to clipboard!');
+                                }}
+                                className="p-1.5 rounded-lg academy-surface text-slate-400 hover:text-white hover:border-teal-400"
+                                title="Copy Student Zoom Invite"
+                              >
+                                {copiedKey === `ev-${ev.id}` ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => {
@@ -2509,10 +2921,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               setEventZoomUrl(ev.zoomJoinUrl || '');
                               setEventMeetingId(ev.zoomMeetingId || '');
                               setEventPasscode(ev.zoomPasscode || '');
+                              setEventStartUrl(ev.zoomStartUrl || '');
+                              setEventAppStartUrl(ev.zoomAppStartUrl || '');
+                              setEventHostKey(ev.zoomHostKey || '');
                               setEventThumb(ev.thumbnailUrl || 'preset:orientation');
                               setEventAudience(ev.isPublic ? 'everyone' : 'enrolled');
+                              window.scrollTo({ top: 300, behavior: 'smooth' });
                             }}
                             className="p-1.5 rounded academy-surface hover:text-teal-400"
+                            title="Edit Event"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
@@ -2526,6 +2943,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               showNotice('Calendar session deleted.');
                             }}
                             className="p-1.5 rounded academy-surface text-rose-400 hover:bg-rose-500/10"
+                            title="Delete Event"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -3227,6 +3645,185 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           variant="modal"
         />
       )}
+
+      {/* PROJECT SAVE SETTINGS & BACKUP MODAL */}
+      {isProjectSettingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-2xl bg-[#030914] rounded-2xl border border-teal-500/40 shadow-2xl p-6 sm:p-8 space-y-6 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b academy-divider">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-400">
+                  <Settings2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg font-bold text-white">
+                    Project Save Settings &amp; Academy Configuration
+                  </h3>
+                  <p className="text-xs academy-text-secondary">
+                    Cloud SQL persistence, recording upload limits, and JSON backup/restore
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsProjectSettingsOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Section 1: Academy Project Identity */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-teal-400 font-mono-tabular">
+                Academy Project Identity
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] academy-text-secondary mb-1">
+                    Academy Title
+                  </label>
+                  <input
+                    type="text"
+                    value={academyProjectTitle}
+                    onChange={(e) => setAcademyProjectTitle(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl academy-elevated focus:outline-none focus:border-teal-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] academy-text-secondary mb-1">
+                    Tagline / Motto
+                  </label>
+                  <input
+                    type="text"
+                    value={academyProjectMotto}
+                    onChange={(e) => setAcademyProjectMotto(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl academy-elevated focus:outline-none focus:border-teal-400"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Persistence & Cloud SQL State */}
+            <div className="p-4 rounded-xl academy-surface border border-teal-500/25 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-teal-300 font-mono-tabular">
+                  Database &amp; Storage Architecture
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono-tabular">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Cloud SQL / Fallback Active</span>
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono-tabular">
+                <div className="p-2 rounded bg-black/40 border border-white/5 text-center">
+                  <span className="academy-text-muted text-[10px] block">COURSES</span>
+                  <span className="text-white font-bold">{courses.length}</span>
+                </div>
+                <div className="p-2 rounded bg-black/40 border border-white/5 text-center">
+                  <span className="academy-text-muted text-[10px] block">RECORDINGS</span>
+                  <span className="text-teal-400 font-bold">{lessons.length}</span>
+                </div>
+                <div className="p-2 rounded bg-black/40 border border-white/5 text-center">
+                  <span className="academy-text-muted text-[10px] block">SESSIONS</span>
+                  <span className="text-amber-400 font-bold">{events.length}</span>
+                </div>
+                <div className="p-2 rounded bg-black/40 border border-white/5 text-center">
+                  <span className="academy-text-muted text-[10px] block">SLIDES</span>
+                  <span className="text-white font-bold">{slides.length}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Recording Upload Engine */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-teal-400 font-mono-tabular">
+                Recording Upload &amp; Video Engine
+              </h4>
+              <div className="p-3.5 rounded-xl academy-surface border border-white/10 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-200">Zero-Buffer HTTP Binary Streaming:</span>
+                  <span className="text-emerald-400 font-bold font-mono-tabular">Enabled (/api/upload-media-raw)</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-200">Offline / Browser Fallback Engine:</span>
+                  <span className="text-teal-300 font-bold font-mono-tabular">IndexedDB Large Blob Vault</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-200">Max Video File Size:</span>
+                  <span className="text-amber-300 font-bold font-mono-tabular">Up to 500 MB per recording</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 4: Export & Import Project State */}
+            <div className="space-y-3 pt-2 border-t academy-divider">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-teal-400 font-mono-tabular">
+                Project Backup &amp; Recovery
+              </h4>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleExportProjectBackup}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Export Project Backup (.json)</span>
+                </button>
+
+                <label className="cursor-pointer flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold academy-elevated hover:border-teal-400 text-teal-300 transition-colors">
+                  <Upload className="w-4 h-4" />
+                  <span>Import Project Backup (.json)</span>
+                  <input
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    onChange={handleImportProjectBackup}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between pt-4 border-t academy-divider">
+              <button
+                type="button"
+                onClick={async () => {
+                  await handleSaveAllPortalState();
+                  setIsProjectSettingsOpen(false);
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-400 to-emerald-400 text-slate-950 hover:opacity-90 transition-opacity"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Save All Project Settings</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsProjectSettingsOpen(false)}
+                className="px-4 py-2 text-xs rounded-xl academy-elevated hover:bg-white/10"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Real Zoom Meeting Launcher Modal (Host Mode & Attendee Mode) */}
+      <ZoomMeetingLauncherModal
+        isOpen={Boolean(activeZoomLauncherEvent)}
+        event={activeZoomLauncherEvent}
+        course={
+          activeZoomLauncherEvent
+            ? courses.find((c) => c.id === activeZoomLauncherEvent.courseId)
+            : null
+        }
+        currentUserProfile={profile}
+        initialHostMode={activeZoomLauncherHostMode}
+        onClose={() => setActiveZoomLauncherEvent(null)}
+      />
     </div>
   );
 };

@@ -18,8 +18,13 @@ import {
   MessageSquarePlus,
   Compass,
   Sparkles,
+  Film,
+  Crown,
+  Key,
 } from 'lucide-react';
+import { getZoomEventDetails } from '../lib/zoomService.ts';
 import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
+import { ClassRecordingsVault } from './ClassRecordingsVault.tsx';
 import {
   Course,
   Enrollment,
@@ -101,7 +106,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   onBrowseCourses,
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'roadmap' | 'homework' | 'feedback' | 'zoom' | 'calendar' | 'inbox'
+    'overview' | 'recordings' | 'roadmap' | 'homework' | 'feedback' | 'zoom' | 'calendar' | 'inbox'
   >('overview');
   const [calendarCourseFilter, setCalendarCourseFilter] = useState<number | null>(null);
 
@@ -277,16 +282,29 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   const handleHomeworkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const targetCourseId = hwCourseId || enrolledCourses[0]?.id;
-    if (!targetCourseId || !hwTitle.trim() || !hwContent.trim()) return;
+    const targetCourseId = hwCourseId || enrolledCourses[0]?.id || courses[0]?.id;
+    if (!targetCourseId) {
+      alert('Please select or enroll in a course to submit homework.');
+      return;
+    }
+    if (!hwTitle.trim()) {
+      alert('Please enter a title for your homework submission.');
+      return;
+    }
+    const cleanContent = hwContent.trim();
+    const cleanAttachment = hwAttachment.trim();
+    if (!cleanContent && !cleanAttachment) {
+      alert('Please provide either written assignment notes or upload a homework file.');
+      return;
+    }
     setSubmittingHw(true);
     try {
       await onSubmitHomework(
         targetCourseId,
         hwLessonId ? Number(hwLessonId) : null,
         hwTitle.trim(),
-        hwContent.trim(),
-        hwAttachment || null
+        cleanContent || `Homework document attached: ${cleanAttachment.split('/').pop() || 'File'}`,
+        cleanAttachment || null
       );
       setHwTitle('');
       setHwContent('');
@@ -413,7 +431,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
         {/* Dedicated Full-Width Navigation Bar (Spans entire width, no more cramming to the far right!) */}
         <div className="w-full bg-slate-950/80 academy-elevated p-1.5 rounded-2xl border border-slate-800/80 shadow-md">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1.5 w-full">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 w-full">
             <button
               type="button"
               onClick={() => setActiveTab('overview')}
@@ -425,6 +443,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             >
               <BookOpen className="w-4 h-4 shrink-0" />
               <span className="truncate">My Courses ({enrolledCourses.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('recordings')}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+                activeTab === 'recordings'
+                  ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
+              }`}
+            >
+              <Film className="w-4 h-4 shrink-0 text-teal-400" />
+              <span className="truncate">Recordings ({lessons.length})</span>
             </button>
 
             <button
@@ -998,6 +1029,22 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
       )}
 
+      {/* TAB: CLASS RECORDINGS VAULT (Playlist on the Side + Big Cinema Screen on the Right) */}
+      {activeTab === 'recordings' && (
+        <ClassRecordingsVault
+          courses={courses}
+          lessons={lessons}
+          enrollments={myEnrollments}
+          initialCourseId={enrolledCourses[0]?.id || null}
+          onToggleLessonProgress={onToggleLessonProgress}
+          onAskUstadh={(subj) => {
+            setSubject(subj);
+            setActiveTab('inbox');
+          }}
+          onOpenCourseCatalog={onBrowseCourses}
+        />
+      )}
+
       {/* TAB 2: HOMEWORK SUBMISSION & FACULTY FEEDBACK / GRADE STATUSES */}
       {activeTab === 'homework' && (
         <div className="space-y-8">
@@ -1079,7 +1126,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
                   <div>
                     <label className="block text-xs academy-text-secondary mb-1">
-                      Upload Homework File (PDF, Word, Image, or Notes)
+                      Upload Homework File (PDF, Word, Image, or Document)
                     </label>
                     <div className="flex items-center gap-2">
                       <input
@@ -1089,8 +1136,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         placeholder="Upload file from computer or paste link ->"
                         className="flex-1 px-3 py-2 text-xs rounded-lg academy-elevated"
                       />
-                      <label className="cursor-pointer flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold academy-elevated hover:border-teal-400 whitespace-nowrap">
-                        <Upload className="w-3.5 h-3.5 text-teal-400" />
+                      <label className="cursor-pointer flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 whitespace-nowrap transition-colors">
+                        <Upload className="w-3.5 h-3.5" />
                         <span>{uploadingHwFile ? 'Uploading...' : 'Upload File'}</span>
                         <input
                           type="file"
@@ -1109,18 +1156,34 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         />
                       </label>
                     </div>
+                    {hwAttachment && (
+                      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-teal-400">
+                        <span>File Attached: {hwAttachment.split('/').pop()}</span>
+                        <button
+                          type="button"
+                          onClick={() => setHwAttachment('')}
+                          className="text-slate-400 hover:text-rose-400 underline ml-auto"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-xs academy-text-secondary mb-1">
-                      Written Response / Assignment Notes *
+                      Written Response / Assignment Notes {hwAttachment ? '(Optional)' : '*'}
                     </label>
                     <textarea
                       rows={5}
-                      required
+                      required={!hwAttachment.trim()}
                       value={hwContent}
                       onChange={(e) => setHwContent(e.target.value)}
-                      placeholder="Write your homework submission here..."
+                      placeholder={
+                        hwAttachment
+                          ? 'Optional notes or questions for Ustadh regarding your attached homework...'
+                          : 'Write your homework submission here...'
+                      }
                       className="w-full px-3 py-2 text-sm rounded-lg academy-elevated"
                     />
                   </div>
@@ -1631,34 +1694,86 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t academy-divider flex items-center justify-between gap-3">
-                    <div className="text-xs font-mono-tabular academy-text-secondary">
-                      {meeting.zoomMeetingId
-                        ? `ID: ${meeting.zoomMeetingId} ${
-                            meeting.zoomPasscode ? `· Pass: ${meeting.zoomPasscode}` : ''
-                          }`
-                        : 'Live Zoom Seminar'}
-                    </div>
-                    {isEnrolled && meeting.zoomJoinUrl ? (
-                      <a
-                        href={meeting.zoomJoinUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors whitespace-nowrap"
-                      >
-                        <Video className="w-3.5 h-3.5" />
-                        <span>Join Meeting</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    ) : meeting.courseId ? (
-                      <button
-                        type="button"
-                        onClick={() => onEnrollCourse(meeting.courseId!)}
-                        className="px-4 py-2 rounded-lg text-xs font-semibold academy-elevated text-teal-400 hover:border-teal-400 whitespace-nowrap"
-                      >
-                        Enroll to Unlock Zoom Link
-                      </button>
-                    ) : null}
+                  <div className="pt-3 border-t academy-divider flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    {(() => {
+                      const zoomDetails = getZoomEventDetails(meeting, profile);
+                      const isUserHost =
+                        profile?.role === 'admin' ||
+                        (profile?.role === 'instructor' &&
+                          (meeting.instructorName === profile?.fullName ||
+                            profile?.fullName?.toLowerCase().includes('mustaqeem') ||
+                            !meeting.courseId));
+
+                      return (
+                        <>
+                          <div className="text-xs font-mono-tabular academy-text-secondary flex flex-wrap items-center gap-2">
+                            <span>ID: {zoomDetails.formattedMeetingId}</span>
+                            <span>· Pass: {zoomDetails.passcode}</span>
+                            {isUserHost && (
+                              <span className="text-amber-300 font-semibold flex items-center gap-1">
+                                <Crown className="w-3 h-3 text-amber-400" />
+                                <span>Host PIN: {zoomDetails.hostKey}</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {isEnrolled && meeting.zoomJoinUrl ? (
+                            isUserHost ? (
+                              <div className="flex items-center gap-2 shrink-0">
+                                <a
+                                  href={zoomDetails.startUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold bg-amber-400 text-slate-950 hover:bg-amber-300 transition-colors whitespace-nowrap shadow-sm shadow-amber-500/20"
+                                >
+                                  <Crown className="w-3.5 h-3.5" />
+                                  <span>Start as Host</span>
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                                <a
+                                  href={meeting.zoomJoinUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold academy-elevated hover:border-teal-400 text-teal-300 transition-colors whitespace-nowrap"
+                                >
+                                  <Video className="w-3.5 h-3.5" />
+                                  <span>Join</span>
+                                </a>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 shrink-0">
+                                <a
+                                  href={meeting.zoomJoinUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors whitespace-nowrap shadow-sm shadow-teal-500/20"
+                                >
+                                  <Video className="w-3.5 h-3.5" />
+                                  <span>Join Live Meeting</span>
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                                <a
+                                  href={zoomDetails.webClientJoinUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="hidden sm:inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400 text-teal-300 whitespace-nowrap"
+                                >
+                                  <span>Web Client</span>
+                                </a>
+                              </div>
+                            )
+                          ) : meeting.courseId ? (
+                            <button
+                              type="button"
+                              onClick={() => onEnrollCourse(meeting.courseId!)}
+                              className="px-4 py-2 rounded-lg text-xs font-semibold academy-elevated text-teal-400 hover:border-teal-400 whitespace-nowrap"
+                            >
+                              Enroll to Unlock Zoom Link
+                            </button>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               );
@@ -1694,6 +1809,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             lessons={lessons}
             enrolledCourseIds={enrolledCourseIds}
             isAdmin={profile?.role === 'admin'}
+            currentProfile={profile}
+            isInstructor={profile?.role === 'instructor'}
             fixedCourseId={calendarCourseFilter}
             externalTimezone={selectedTimezone}
             onExternalTimezoneChange={setSelectedTimezone}

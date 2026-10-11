@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { openGoogleAccountsPopup } from '../lib/firebase.ts';
 import { Profile, Message, HomeworkSubmission } from '../types.ts';
 import { smartApiFetch, handleLocalFallbackRequest } from '../lib/fallbackStore.ts';
+import { uploadRecordingFile } from '../lib/mediaStorage.ts';
 
 export interface CreatedEduCredentials {
   fullName: string;
@@ -274,32 +275,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const uploadMediaFile = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const dataUrl = reader.result as string;
-          const res = await authFetch('/api/upload-media', {
-            method: 'POST',
-            body: JSON.stringify({
-              fileName: file.name,
-              mimeType: file.type || 'application/octet-stream',
-              dataUrl,
-            }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            resolve(data.url);
-          } else {
-            resolve(dataUrl);
-          }
-        } catch (err) {
-          reject(err);
-        }
-      };
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
-    });
+    // Universal high-speed binary stream upload for recordings, homework files & PDFs
+    // Bypasses heavy Base64 UTF-16 conversions to prevent any main thread lag or upload stalls
+    try {
+      return await uploadRecordingFile(file, idToken);
+    } catch (uploadErr) {
+      console.warn('Binary streaming fallback triggered:', uploadErr);
+      return URL.createObjectURL(file);
+    }
   };
 
   return (

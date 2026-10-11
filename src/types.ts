@@ -124,6 +124,9 @@ export interface CourseEvent {
   zoomJoinUrl?: string | null;
   zoomMeetingId?: string | null;
   zoomPasscode?: string | null;
+  zoomStartUrl?: string | null;
+  zoomAppStartUrl?: string | null;
+  zoomHostKey?: string | null;
   thumbnailUrl?: string | null;
   instructorName: string;
   isPublic: boolean;

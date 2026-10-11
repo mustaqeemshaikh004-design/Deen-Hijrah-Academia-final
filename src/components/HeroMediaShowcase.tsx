@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { HomepageSlide } from '../types.ts';
 import { resolveThumbnailUrl, ACADEMY_ASSETS } from '../lib/assets.ts';
+import { AcademyLogo } from './AcademyLogo.tsx';
 
 interface HeroMediaShowcaseProps {
   slides: HomepageSlide[];
@@ -552,17 +553,15 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
           )
         )}
 
-        {/* Signature DEEN HIJRAH Watermark (Source Code Academia style) */}
+        {/* Signature DEEN HIJRAH Watermark with Official Academy Emblem */}
         {(hasBackgroundVideo || isCurrentSlideVideo) && (
-          <div className="absolute top-6 right-6 sm:right-10 z-20 pointer-events-none select-none flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#040A14]/80 backdrop-blur-md border border-amber-400/50 shadow-2xl">
-            <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 flex items-center justify-center shadow-sm">
-              <span className="text-[10px] font-black text-slate-950 leading-none">DH</span>
-            </div>
+          <div className="absolute top-6 right-6 sm:right-10 z-20 pointer-events-none select-none flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-[#040A14]/85 backdrop-blur-md border border-teal-500/40 shadow-2xl">
+            <AcademyLogo size="sm" />
             <div className="flex flex-col leading-tight text-left">
-              <span className="text-[10px] font-black tracking-widest text-amber-300 uppercase">
+              <span className="text-[10px] font-black tracking-widest text-teal-300 uppercase">
                 DEEN HIJRAH
               </span>
-              <span className="text-[7px] font-bold tracking-widest text-teal-300 uppercase">
+              <span className="text-[7.5px] font-bold tracking-widest text-amber-300 uppercase">
                 ACADEMIA
               </span>
             </div>

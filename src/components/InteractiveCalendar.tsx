@@ -23,8 +23,17 @@ import {
   X,
   Search,
   Users,
+  Crown,
+  Key,
+  Copy,
 } from 'lucide-react';
-import { Course, CourseEvent, Lesson, CalendarSettings } from '../types.ts';
+import { Course, CourseEvent, Lesson, CalendarSettings, Profile } from '../types.ts';
+import { ZoomMeetingLauncherModal } from './ZoomMeetingLauncherModal.tsx';
+import {
+  getZoomEventDetails,
+  safeOpenLink,
+  generateZoomInvitationText,
+} from '../lib/zoomService.ts';
 import { resolveThumbnailUrl, ACADEMY_ASSETS } from '../lib/assets.ts';
 import {
   getDetectedUserTimezone,
@@ -49,6 +58,9 @@ export interface UnifiedCalendarItem {
   zoomJoinUrl?: string | null;
   zoomMeetingId?: string | null;
   zoomPasscode?: string | null;
+  zoomStartUrl?: string | null;
+  zoomAppStartUrl?: string | null;
+  zoomHostKey?: string | null;
   videoUrl?: string | null;
   isPublic: boolean;
 }
@@ -59,6 +71,8 @@ interface InteractiveCalendarProps {
   lessons: Lesson[];
   enrolledCourseIds: number[];
   isAdmin: boolean;
+  currentProfile?: Profile | null;
+  isInstructor?: boolean;
   fixedCourseId?: number | null;
   externalTimezone?: string;
   onExternalTimezoneChange?: (tz: string) => void;
@@ -75,6 +89,8 @@ export const InteractiveCalendar: React.FC<InteractiveCalendarProps> = ({
   lessons,
   enrolledCourseIds,
   isAdmin,
+  currentProfile = null,
+  isInstructor = false,
   fixedCourseId = null,
   externalTimezone,
   onExternalTimezoneChange,
@@ -84,6 +100,18 @@ export const InteractiveCalendar: React.FC<InteractiveCalendarProps> = ({
   calendarSettings,
   onUpdateCalendarSettings,
 }) => {
+  const [activeZoomLauncherItem, setActiveZoomLauncherItem] = useState<{
+    event: CourseEvent;
+    course?: Course | null;
+    isHost: boolean;
+  } | null>(null);
+  const [calendarCopiedKey, setCalendarCopiedKey] = useState<string | null>(null);
+
+  const handleCalendarCopy = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCalendarCopiedKey(key);
+    setTimeout(() => setCalendarCopiedKey(null), 2500);
+  };
   const detectedTz = useMemo(() => getDetectedUserTimezone(), []);
   const [internalTimezone, setInternalTimezone] = useState<string>(
     calendarSettings?.defaultTimezone || detectedTz
@@ -229,6 +257,9 @@ export const InteractiveCalendar: React.FC<InteractiveCalendarProps> = ({
         zoomJoinUrl: ev.zoomJoinUrl,
         zoomMeetingId: ev.zoomMeetingId,
         zoomPasscode: ev.zoomPasscode,
+        zoomStartUrl: ev.zoomStartUrl,
+        zoomAppStartUrl: ev.zoomAppStartUrl,
+        zoomHostKey: ev.zoomHostKey,
         isPublic: ev.isPublic !== undefined ? ev.isPublic : true,
       });
     });
@@ -1448,6 +1479,16 @@ export const InteractiveCalendar: React.FC<InteractiveCalendarProps> = ({
           </div>
         </div>
       )}
+
+      {/* Real Zoom Meeting Launcher Modal (Host Mode & Attendee Mode) */}
+      <ZoomMeetingLauncherModal
+        isOpen={Boolean(activeZoomLauncherItem)}
+        event={activeZoomLauncherItem?.event || null}
+        course={activeZoomLauncherItem?.course || null}
+        currentUserProfile={currentProfile}
+        initialHostMode={activeZoomLauncherItem?.isHost || false}
+        onClose={() => setActiveZoomLauncherItem(null)}
+      />
     </div>
   );
 
@@ -1504,22 +1545,115 @@ export const InteractiveCalendar: React.FC<InteractiveCalendarProps> = ({
           {item.zoomJoinUrl && (
             <div className="pt-2 border-t academy-divider space-y-2">
               {canJoinZoom ? (
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-3 text-xs academy-text-secondary font-mono-tabular">
-                    {item.zoomMeetingId && <span>Meeting ID: {item.zoomMeetingId}</span>}
-                    {item.zoomPasscode && <span>Passcode: {item.zoomPasscode}</span>}
-                  </div>
-                  <a
-                    href={item.zoomJoinUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-teal-400 hover:bg-teal-300 text-slate-950 transition-colors whitespace-nowrap shadow-sm"
-                  >
-                    <Video className="w-4 h-4" />
-                    <span>Join Live Zoom Meeting</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
+                (() => {
+                  const isUserHost =
+                    isAdmin ||
+                    Boolean(currentProfile?.role === 'admin') ||
+                    (Boolean(currentProfile?.role === 'instructor') &&
+                      (item.instructorName === currentProfile?.fullName ||
+                        currentProfile?.fullName?.toLowerCase().includes('mustaqeem') ||
+                        !item.courseId));
+                  const zoomDetails = getZoomEventDetails(item, currentProfile);
+                  const parentCourse = courses.find((c) => c.id === item.courseId);
+                  const originalEvent = events.find(
+                    (e) =>
+                      `event-${e.id}` === item.id ||
+                      (e.courseId === item.courseId && e.title === item.title)
+                  );
+
+                  return (
+                    <div className="space-y-2.5">
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-mono-tabular">
+                        {item.zoomMeetingId && (
+                          <span className="text-teal-300 bg-teal-950/60 px-2 py-0.5 rounded border border-teal-500/30">
+                            ID: {zoomDetails.formattedMeetingId}
+                          </span>
+                        )}
+                        {item.zoomPasscode && (
+                          <span className="text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded border border-slate-800">
+                            Pass: {zoomDetails.passcode}
+                          </span>
+                        )}
+                        {isUserHost && (
+                          <span className="inline-flex items-center gap-1 text-amber-300 font-semibold bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/30">
+                            <Crown className="w-3 h-3 text-amber-400" />
+                            <span>Host PIN: {zoomDetails.hostKey}</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {isUserHost ? (
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <a
+                            href={zoomDetails.startUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 transition-colors whitespace-nowrap shadow-sm shadow-amber-500/20"
+                          >
+                            <Crown className="w-4 h-4 text-slate-950" />
+                            <span>Start Meeting as Host</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const fallbackEvent: CourseEvent = originalEvent || {
+                                id: 999,
+                                courseId: item.courseId,
+                                title: item.title,
+                                description: item.description,
+                                eventType: item.category as any,
+                                eventDate: item.originalDate,
+                                startTime: '14:00',
+                                sourceTimezone: 'America/New_York',
+                                duration: item.duration,
+                                zoomJoinUrl: item.zoomJoinUrl,
+                                zoomMeetingId: item.zoomMeetingId,
+                                zoomPasscode: item.zoomPasscode,
+                                zoomStartUrl: item.zoomStartUrl,
+                                zoomAppStartUrl: item.zoomAppStartUrl,
+                                zoomHostKey: item.zoomHostKey,
+                                instructorName: item.instructorName,
+                                isPublic: item.isPublic,
+                              };
+                              setActiveZoomLauncherItem({
+                                event: fallbackEvent,
+                                course: parentCourse,
+                                isHost: true,
+                              });
+                            }}
+                            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-semibold academy-elevated hover:border-teal-400 text-teal-300 whitespace-nowrap"
+                          >
+                            <Settings2 className="w-3.5 h-3.5" />
+                            <span>Host Options</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <a
+                            href={item.zoomJoinUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold bg-teal-400 hover:bg-teal-300 text-slate-950 transition-colors whitespace-nowrap shadow-sm"
+                          >
+                            <Video className="w-4 h-4" />
+                            <span>Join Live Zoom Meeting</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                          <a
+                            href={zoomDetails.webClientJoinUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-semibold academy-elevated hover:border-teal-400 text-teal-300 whitespace-nowrap"
+                          >
+                            <span>Browser Client</span>
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
               ) : (
                 <div className="flex items-center justify-between gap-3 pt-1">
                   <div className="flex items-center gap-1.5 text-xs text-amber-400">

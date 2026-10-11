@@ -22,6 +22,11 @@ import {
   Maximize2,
   Minimize2,
   RotateCcw,
+  Search,
+  Volume2,
+  ChevronRight,
+  ChevronLeft,
+  Film,
 } from 'lucide-react';
 import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
 import {
@@ -33,9 +38,11 @@ import {
   HomeworkSubmission,
   HomeworkGradeStatus,
   Message,
+  Profile,
   parseCourseTags,
 } from '../types.ts';
 import { resolveThumbnailUrl, ACADEMY_ASSETS } from '../lib/assets.ts';
+import { resolvePlayableVideoUrl } from '../lib/mediaStorage.ts';
 import { InteractiveCalendar } from './InteractiveCalendar.tsx';
 import {
   convertClassTimeToRegion,
@@ -130,6 +137,7 @@ interface CourseWatchViewProps {
   homeworkList: HomeworkSubmission[];
   messages?: Message[];
   isAdmin: boolean;
+  currentProfile?: Profile | null;
   onBack: () => void;
   onEnroll: (courseId: number) => Promise<void>;
   onToggleLessonComplete: (lessonId: number) => Promise<void>;
@@ -185,6 +193,7 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
   homeworkList,
   messages = [],
   isAdmin,
+  currentProfile = null,
   onBack,
   onEnroll,
   onToggleLessonComplete,
@@ -220,6 +229,7 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
   );
   const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [videoHasError, setVideoHasError] = useState(false);
+  const [playlistSearch, setPlaylistSearch] = useState('');
   const [activeSubTab, setActiveSubTab] = useState<
     'lecture' | 'syllabus' | 'calendar' | 'homework'
   >('lecture');
@@ -264,6 +274,26 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
 
   const currentLesson =
     courseLessons.find((l) => l.id === selectedLessonId) || courseLessons[0] || null;
+
+  const [resolvedVideoUrl, setResolvedVideoUrl] = useState<string>(currentLesson?.videoUrl || '');
+
+  // Resolve playable video url (supports direct HTTP links, /uploads/*, and indexeddb://)
+  React.useEffect(() => {
+    setVideoHasError(false);
+    if (!currentLesson?.videoUrl) {
+      setResolvedVideoUrl('');
+      return;
+    }
+    let isCancelled = false;
+    resolvePlayableVideoUrl(currentLesson.videoUrl).then((url) => {
+      if (!isCancelled) {
+        setResolvedVideoUrl(url);
+      }
+    });
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentLesson?.videoUrl]);
 
   const completedIds: number[] = useMemo(() => {
     if (!enrollment?.completedLessonIds) return [];
@@ -446,15 +476,18 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
 
   const handleHomeworkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hwTitle.trim() || !hwContent.trim()) return;
+    if (!hwTitle.trim()) return;
+    const cleanContent = hwContent.trim();
+    const cleanAttachment = hwAttachmentUrl.trim();
+    if (!cleanContent && !cleanAttachment) return;
     setSubmittingHw(true);
     try {
       await onSubmitHomework(
         course.id,
         hwLessonId ? Number(hwLessonId) : null,
         hwTitle.trim(),
-        hwContent.trim(),
-        hwAttachmentUrl || null
+        cleanContent || `Homework document attached: ${cleanAttachment.split('/').pop() || 'File'}`,
+        cleanAttachment || null
       );
       setHwTitle('');
       setHwContent('');
@@ -828,6 +861,8 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
               lessons={lessons}
               enrolledCourseIds={isEnrolled ? [course.id] : []}
               isAdmin={isAdmin}
+              currentProfile={currentProfile}
+              isInstructor={currentProfile?.role === 'instructor'}
               fixedCourseId={course.id}
               onEnrollCourse={onEnroll}
               onOpenWatchCourse={() => setActiveSubTab('lecture')}
@@ -990,8 +1025,8 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                           placeholder="Paste link or click Upload File ->"
                           className="flex-1 px-3 py-2 text-xs rounded-lg academy-elevated"
                         />
-                        <label className="cursor-pointer flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold academy-elevated hover:border-teal-400 whitespace-nowrap">
-                          <Upload className="w-3.5 h-3.5 text-teal-400" />
+                        <label className="cursor-pointer flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 whitespace-nowrap transition-colors">
+                          <Upload className="w-3.5 h-3.5" />
                           <span>{uploadingHwFile ? 'Uploading...' : 'Upload File'}</span>
                           <input
                             type="file"
@@ -1010,18 +1045,34 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                           />
                         </label>
                       </div>
+                      {hwAttachmentUrl && (
+                        <div className="mt-1.5 flex items-center gap-2 text-[11px] text-teal-400">
+                          <span>File Attached: {hwAttachmentUrl.split('/').pop()}</span>
+                          <button
+                            type="button"
+                            onClick={() => setHwAttachmentUrl('')}
+                            className="text-slate-400 hover:text-rose-400 underline ml-auto"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div>
                       <label className="block text-xs academy-text-secondary mb-1">
-                        Written Response / Notes *
+                        Written Response / Notes {hwAttachmentUrl ? '(Optional)' : '*'}
                       </label>
                       <textarea
                         rows={5}
-                        required
+                        required={!hwAttachmentUrl.trim()}
                         value={hwContent}
                         onChange={(e) => setHwContent(e.target.value)}
-                        placeholder="Write your homework answer, textual analysis, or notes for Ustadh Mustaqeem Shaikh..."
+                        placeholder={
+                          hwAttachmentUrl
+                            ? 'Optional notes or questions for Ustadh regarding your attached document...'
+                            : 'Write your homework answer, textual analysis, or notes for Ustadh Mustaqeem Shaikh...'
+                        }
                         className="w-full px-3 py-2 text-sm rounded-lg academy-elevated focus:outline-none focus:border-teal-400"
                       />
                     </div>
@@ -1459,11 +1510,17 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
           >
             <div
               className={`grid grid-cols-1 ${
-                isTheaterMode ? 'lg:grid-cols-1' : 'lg:grid-cols-10'
+                isTheaterMode ? 'lg:grid-cols-1' : 'lg:grid-cols-12'
               } gap-6 items-start`}
             >
-              {/* Left Side (or Full Width in Theater Mode): Video Player, Lesson Details, PDF Download & Mark as Complete */}
-              <div className={`${isTheaterMode ? 'w-full' : 'lg:col-span-7'} space-y-6`}>
+              {/* Right Side (or Full Width in Theater Mode): Video Player Stage on the Right */}
+              <div
+                className={`${
+                  isTheaterMode
+                    ? 'order-1 w-full'
+                    : 'order-1 lg:order-2 lg:col-span-8 xl:col-span-8'
+                } space-y-6`}
+              >
                 {currentLesson ? (
                   <>
                     <div className="relative rounded-xl overflow-hidden academy-surface border border-teal-500/30 bg-black shadow-2xl">
@@ -1501,7 +1558,7 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                               <span>Retry Video</span>
                             </button>
                             <a
-                              href={currentLesson.videoUrl}
+                              href={resolvedVideoUrl || currentLesson.videoUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400 text-teal-300 transition-colors"
@@ -1521,8 +1578,8 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                         />
                       ) : (
                         <video
-                          key={`${currentLesson.videoUrl}-${currentLesson.id}`}
-                          src={currentLesson.videoUrl}
+                          key={`${resolvedVideoUrl || currentLesson.videoUrl}-${currentLesson.id}`}
+                          src={resolvedVideoUrl || currentLesson.videoUrl}
                           poster={resolveThumbnailUrl(
                             currentLesson.thumbnailUrl || course.thumbnailUrl
                           )}
@@ -1704,20 +1761,40 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                 )}
               </div>
 
-              {/* Right Side (30% -> 3 of 10 columns): Interactive Curriculum & Downloadable Resources Sidebar */}
-              <div className="lg:col-span-3 rounded-xl academy-surface p-5 space-y-4">
+              {/* Left Side (Playlist on the Side): Interactive Recordings Playlist */}
+              <div
+                className={`${
+                  isTheaterMode
+                    ? 'order-2 w-full'
+                    : 'order-2 lg:order-1 lg:col-span-4 xl:col-span-4'
+                } rounded-2xl academy-surface p-4 sm:p-5 space-y-4 shadow-xl border border-teal-500/25 sticky top-24`}
+              >
                 <div className="pb-3 border-b academy-divider space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-display text-base font-bold text-teal-400">
-                      Curriculum &amp; Resources
+                    <h3 className="font-display text-base font-bold text-teal-400 flex items-center gap-2">
+                      <Film className="w-4 h-4 text-teal-300" />
+                      <span>Course Recordings</span>
                     </h3>
-                    <span className="text-xs font-mono-tabular academy-text-secondary">
+                    <span className="text-xs font-mono-tabular text-emerald-400 font-semibold">
                       {completedIds.length}/{courseLessons.length} Done
                     </span>
                   </div>
+
                   <p className="text-[11px] academy-text-secondary">
-                    All class recordings and resources are 100% free and open for everyone to watch.
+                    Click any lecture in the side playlist to play on the big screen.
                   </p>
+
+                  {/* Playlist Search Box */}
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={playlistSearch}
+                      onChange={(e) => setPlaylistSearch(e.target.value)}
+                      placeholder="Search lecture by title or topic..."
+                      className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-teal-400"
+                    />
+                  </div>
 
                   {/* File-Type Icon Legend (PDF, Doc, Link) */}
                   <div className="flex items-center gap-3 pt-0.5 text-[11px] academy-text-secondary">
@@ -1745,71 +1822,107 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                   </div>
                 </div>
 
-                <div className="space-y-3 max-h-[620px] overflow-y-auto pr-1">
-                  {courseLessons.map((lesson) => {
-                    const isSelected = currentLesson?.id === lesson.id;
-                    const isDone = completedIds.includes(lesson.id);
-                    const isUnlocked = isEnrolled || lesson.isFreePreview;
-                    const lessonResources = getLessonDownloadableResources(lesson);
+                <div className="space-y-2.5 max-h-[640px] overflow-y-auto pr-1">
+                  {courseLessons
+                    .filter(
+                      (l) =>
+                        !playlistSearch.trim() ||
+                        l.title.toLowerCase().includes(playlistSearch.toLowerCase()) ||
+                        l.description.toLowerCase().includes(playlistSearch.toLowerCase())
+                    )
+                    .map((lesson) => {
+                      const isSelected = currentLesson?.id === lesson.id;
+                      const isDone = completedIds.includes(lesson.id);
+                      const isUnlocked = isEnrolled || lesson.isFreePreview;
+                      const lessonResources = getLessonDownloadableResources(lesson);
 
-                    return (
-                      <div
-                        key={lesson.id}
-                        className={`rounded-lg p-3 transition-all border ${
-                          isSelected
-                            ? 'academy-elevated border-teal-400'
-                            : 'border-transparent hover:bg-teal-500/5'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleComplete(lesson.id)}
-                            title={isDone ? 'Mark as incomplete' : 'Mark as completed'}
-                            className="mt-0.5 text-teal-400 hover:text-teal-300 shrink-0"
-                          >
-                            {isDone ? (
-                              <CheckCircle2 className="w-4 h-4 fill-teal-400/20" />
-                            ) : (
-                              <Circle className="w-4 h-4 academy-text-muted" />
-                            )}
-                          </button>
-
-                          <div className="flex-1 min-w-0 space-y-2.5">
+                      return (
+                        <div
+                          key={lesson.id}
+                          onClick={() => {
+                            setSelectedLessonId(lesson.id);
+                            setVideoHasError(false);
+                          }}
+                          className={`rounded-xl p-3 transition-all border cursor-pointer ${
+                            isSelected
+                              ? 'bg-gradient-to-r from-teal-950/60 via-slate-900 to-slate-950 border-teal-400 shadow-lg shadow-teal-500/10 ring-1 ring-teal-400/40'
+                              : 'bg-slate-900/40 border-slate-800/80 hover:bg-slate-900/90 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
                             <button
                               type="button"
-                              onClick={() => setSelectedLessonId(lesson.id)}
-                              className="w-full text-left min-w-0 space-y-1.5"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleComplete(lesson.id);
+                              }}
+                              title={isDone ? 'Mark as incomplete' : 'Mark as completed'}
+                              className="mt-1 text-teal-400 hover:text-teal-300 shrink-0"
                             >
-                              <div className="flex items-center gap-2">
-                                <img
-                                  src={resolveThumbnailUrl(
-                                    lesson.thumbnailUrl || course.thumbnailUrl
-                                  )}
-                                  alt={lesson.title}
-                                  loading="lazy"
-                                  decoding="async"
-                                  referrerPolicy="no-referrer"
-                                  onError={(e) => {
-                                    (e.currentTarget as HTMLImageElement).src =
-                                      ACADEMY_ASSETS.courseSeerah;
-                                  }}
-                                  className="w-12 h-8 rounded object-cover shrink-0"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-xs font-semibold line-clamp-2">
+                              {isDone ? (
+                                <CheckCircle2 className="w-4 h-4 fill-teal-400/20" />
+                              ) : (
+                                <Circle className="w-4 h-4 academy-text-muted" />
+                              )}
+                            </button>
+
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <div className="flex items-center gap-2.5">
+                                <div className="relative w-16 h-11 rounded-lg overflow-hidden shrink-0 bg-slate-950 border border-white/10">
+                                  <img
+                                    src={resolveThumbnailUrl(
+                                      lesson.thumbnailUrl || course.thumbnailUrl
+                                    )}
+                                    alt={lesson.title}
+                                    loading="lazy"
+                                    decoding="async"
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      (e.currentTarget as HTMLImageElement).src =
+                                        ACADEMY_ASSETS.courseSeerah;
+                                    }}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                  <div className="absolute inset-0 bg-black/20" />
+                                </div>
+                                <div className="min-w-0 flex-1 space-y-0.5">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="text-[10px] font-mono-tabular text-teal-400 font-semibold">
+                                      Lecture #{lesson.positionOrder}
+                                    </span>
+                                    {isSelected ? (
+                                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-400 text-slate-950">
+                                        <span className="flex items-end gap-0.5 h-2">
+                                          <span className="w-0.5 h-full bg-slate-950 animate-pulse" />
+                                          <span className="w-0.5 h-1.5 bg-slate-950 animate-pulse delay-75" />
+                                          <span className="w-0.5 h-full bg-slate-950 animate-pulse delay-150" />
+                                        </span>
+                                        <span>Now Playing</span>
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${
+                                          lesson.isFreePreview
+                                            ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
+                                            : 'bg-emerald-500/15 text-emerald-300'
+                                        }`}
+                                      >
+                                        {lesson.isFreePreview ? 'Orientation' : 'Enrolled'}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-xs font-semibold text-slate-100 line-clamp-2 leading-snug">
                                     {lesson.title}
                                   </div>
                                 </div>
                               </div>
 
-                              <div className="flex items-center justify-between text-[11px] academy-text-muted font-mono-tabular">
+                              <div className="flex items-center justify-between text-[11px] academy-text-muted font-mono-tabular pt-1 border-t border-slate-800/60">
                                 <span>{lesson.duration}</span>
                                 <span className="text-emerald-400 font-semibold">
                                   Free to Watch
                                 </span>
                               </div>
-                            </button>
 
                             {/* Downloadable Resource Items in Curriculum Sidebar with Specific, Distinct File-Type Icons (PDF, Doc, Link) */}
                             <div className="pt-2 border-t academy-divider space-y-1.5">

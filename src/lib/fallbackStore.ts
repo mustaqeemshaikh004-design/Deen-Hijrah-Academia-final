@@ -474,11 +474,40 @@ function loadStore(): PortalStoreState {
   return initial;
 }
 
+function sanitizeStateForStorage(state: PortalStoreState): PortalStoreState {
+  const sanitizeString = (val?: string | null): string => {
+    if (!val) return '';
+    // Strip accidental huge base64 dataUrls exceeding 200KB from state before writing to localStorage
+    if (val.startsWith('data:') && val.length > 200000) {
+      return 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+    }
+    return val;
+  };
+
+  return {
+    ...state,
+    lessons: (state.lessons || []).map((l) => ({
+      ...l,
+      videoUrl: sanitizeString(l.videoUrl),
+      attachmentUrl: l.attachmentUrl ? sanitizeString(l.attachmentUrl) : null,
+    })),
+    courses: (state.courses || []).map((c) => ({
+      ...c,
+      syllabusFileUrl: c.syllabusFileUrl ? sanitizeString(c.syllabusFileUrl) : null,
+    })),
+    slides: (state.slides || []).map((s) => ({
+      ...s,
+      videoUrl: s.videoUrl ? sanitizeString(s.videoUrl) : null,
+    })),
+  };
+}
+
 function saveStore(state: PortalStoreState) {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // ignore quota errors
+    const clean = sanitizeStateForStorage(state);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+  } catch (err) {
+    console.warn('LocalStorage save notice (prevented quota crash):', err);
   }
 }
 
@@ -1306,6 +1335,9 @@ export async function handleLocalFallbackRequest(
       zoomJoinUrl: body.zoomJoinUrl ? String(body.zoomJoinUrl) : null,
       zoomMeetingId: body.zoomMeetingId ? String(body.zoomMeetingId) : null,
       zoomPasscode: body.zoomPasscode ? String(body.zoomPasscode) : null,
+      zoomStartUrl: body.zoomStartUrl ? String(body.zoomStartUrl) : null,
+      zoomAppStartUrl: body.zoomAppStartUrl ? String(body.zoomAppStartUrl) : null,
+      zoomHostKey: body.zoomHostKey ? String(body.zoomHostKey) : null,
       thumbnailUrl: body.thumbnailUrl ? String(body.thumbnailUrl) : 'preset:orientation',
       isPublic: body.isPublic !== undefined ? Boolean(body.isPublic) : true,
       instructorName: String(body.instructorName || 'Mustaqeem Shaikh'),

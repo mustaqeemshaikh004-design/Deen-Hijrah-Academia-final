@@ -10,6 +10,7 @@ import {
   KeyRound,
   Mail,
   X,
+  Sparkles,
 } from 'lucide-react';
 import { useTheme, ThemeMode } from '../context/ThemeContext.tsx';
 import { useAuth, CreatedEduCredentials } from '../context/AuthContext.tsx';
@@ -22,7 +23,8 @@ export type ActiveView =
   | 'faculty'
   | 'calendar'
   | 'dashboard'
-  | 'admin';
+  | 'admin'
+  | 'enroll';
 
 interface NavbarProps {
   activeView: ActiveView;
@@ -93,11 +95,20 @@ export const Navbar: React.FC<NavbarProps> = ({
     setThemeMode(next);
   };
 
+  // Clean, realistic Deen Hijrah Academia official student email generator
+  const cleanFirstPart = firstName.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const cleanLastPart = lastName.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+  const generatedLocalPart = cleanFirstPart
+    ? cleanLastPart
+      ? `${cleanFirstPart}.${cleanLastPart}`
+      : cleanFirstPart
+    : 'student';
+
   const previewEduEmail = createEmail.trim()
-    ? createEmail.trim().toLowerCase()
-    : `${
-        firstName.trim().toLowerCase().replace(/[^a-z0-9]/g, '') || 'firstname'
-      }@deenhijrah.edu`;
+    ? createEmail.trim().toLowerCase().includes('@')
+      ? createEmail.trim().toLowerCase()
+      : `${createEmail.trim().toLowerCase()}@deenhijrah.edu`
+    : `${generatedLocalPart}@deenhijrah.edu`;
 
   const completeSignedInNavigation = (signedInProfile: Profile) => {
     if (
@@ -119,11 +130,14 @@ export const Navbar: React.FC<NavbarProps> = ({
     if (!firstName.trim() && !createEmail.trim()) return;
     setCreatingAccount(true);
     try {
+      const emailToSubmit = createEmail.trim()
+        ? createEmail.trim()
+        : `${generatedLocalPart}@deenhijrah.edu`;
       const creds = await createEduAccount(
-        firstName.trim(),
+        firstName.trim() || 'Scholar Student',
         lastName.trim(),
         createPassword.trim() || 'deen123',
-        createEmail.trim() || undefined
+        emailToSubmit
       );
       setCreatedCredentials(creds);
       setSignInEmail(creds.email);
@@ -154,18 +168,18 @@ export const Navbar: React.FC<NavbarProps> = ({
     }
   };
 
-  // Handler 3: Continue with Google (Popup first, or instant Google Account sign-in if popup/domain is restricted)
+  // Handler 3: Continue with Google (OAuth popup with instant inline account picker fallback)
   const handleGoogleAuthClick = async () => {
     setSigningInGoogle(true);
     try {
       const signedInProfile = await signInWithGoogle();
       completeSignedInNavigation(signedInProfile);
-    } catch {
-      // If the user already typed an email in Sign In or Create Account, sign them in with Google immediately
+    } catch (err: any) {
+      // If the user already typed an email anywhere in the modal, sign them in with Google immediately
       const candidateEmail = (googleEmail || signInEmail || createEmail).trim();
       const candidateName =
         googleFullName.trim() || `${firstName.trim()} ${lastName.trim()}`.trim();
-      if (candidateEmail) {
+      if (candidateEmail && candidateEmail.includes('@')) {
         try {
           const signedInProfile = await signInWithGoogleAccount(
             candidateEmail,
@@ -180,6 +194,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       if (firstName.trim() && !googleFullName.trim()) {
         setGoogleFullName(`${firstName.trim()} ${lastName.trim()}`.trim());
       }
+      // Reveal the streamlined Google Sign-In prompt
       setShowGoogleQuickForm(true);
     } finally {
       setSigningInGoogle(false);
@@ -283,6 +298,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             {unreadCount > 0 ? ` (${unreadCount})` : ''}
           </button>
 
+          <button
+            type="button"
+            onClick={() => onNavigate('enroll')}
+            className={`whitespace-nowrap transition-colors pb-0.5 border-b-2 flex items-center gap-1.5 ${
+              activeView === 'enroll'
+                ? 'border-emerald-400 text-emerald-400 font-bold'
+                : 'border-transparent text-emerald-400/90 hover:text-emerald-300 font-semibold'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>Enroll</span>
+          </button>
+
           {profile?.role === 'admin' ? (
             <button
               type="button"
@@ -346,7 +374,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Mobile Navigation Bar */}
       <div className="flex md:hidden items-center justify-around px-3 py-2 academy-surface border-b text-xs font-medium overflow-x-auto gap-2">
-        {(['home', 'courses', 'faculty', 'calendar', 'dashboard'] as ActiveView[]).map((view) => (
+        {(['home', 'courses', 'faculty', 'calendar', 'dashboard', 'enroll'] as ActiveView[]).map((view) => (
           <button
             key={view}
             type="button"

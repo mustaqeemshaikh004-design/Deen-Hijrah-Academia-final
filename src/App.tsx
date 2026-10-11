@@ -34,6 +34,8 @@ import { FacultyPage } from './components/FacultyPage.tsx';
 import { AcademyLogo, SplashIntro } from './components/AcademyLogo.tsx';
 import { MovingBackground } from './components/MovingBackground.tsx';
 import { CourseEnrollmentModal } from './components/CourseEnrollmentModal.tsx';
+import { CoolEnrollmentView } from './components/CoolEnrollmentView.tsx';
+import { NavigationLoadingOverlay } from './components/NavigationLoadingOverlay.tsx';
 import { OpenEnrollmentHeroBanner } from './components/OpenEnrollmentHeroBanner.tsx';
 import {
   Course,
@@ -115,6 +117,44 @@ function AcademyPortalContent() {
   const [loadingPortal, setLoadingPortal] = useState<boolean>(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [uploadingFacultyPhoto, setUploadingFacultyPhoto] = useState<boolean>(false);
+
+  // Special Logo Page Transition Loader State (for every page navigation)
+  const [isPageNavigating, setIsPageNavigating] = useState<boolean>(false);
+  const [navLoadingMessage, setNavLoadingMessage] = useState<string>('Loading Sacred Knowledge...');
+  const [navTargetTitle, setNavTargetTitle] = useState<string>('');
+
+  const handleNavigateWithLogo = useCallback(
+    (view: ActiveView, customMsg?: string, targetTitle?: string) => {
+      const messagesByView: Record<ActiveView, { msg: string; title: string }> = {
+        home: { msg: 'Entering Academy Sanctuary...', title: 'Sanctuary Homepage' },
+        courses: { msg: 'Loading Sacred Curriculum...', title: 'Course Catalog & Syllabi' },
+        faculty: { msg: 'Connecting with Scholars...', title: 'Deen Hijrah Faculty' },
+        calendar: { msg: 'Converting Global Class Schedule...', title: 'Interactive Master Calendar' },
+        dashboard: { msg: 'Accessing Student Portal & Recordings...', title: 'Student Dashboard' },
+        admin: { msg: 'Unlocking Teacher Studio...', title: 'Faculty & Curriculum Manager' },
+        enroll: { msg: 'Preparing 2026 Cohort Registration...', title: 'Sacred Knowledge Enrollment' },
+      };
+
+      const meta = messagesByView[view] || {
+        msg: 'Loading Sacred Knowledge...',
+        title: 'Deen Hijrah Academia',
+      };
+      setNavLoadingMessage(customMsg || meta.msg);
+      setNavTargetTitle(targetTitle || meta.title);
+      setIsPageNavigating(true);
+
+      setTimeout(() => {
+        setWatchingCourse(null);
+        setEnrollingCourse(null);
+        setActiveView(view);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setTimeout(() => {
+          setIsPageNavigating(false);
+        }, 260);
+      }, 420);
+    },
+    []
+  );
 
   // Course Catalog Search & Category Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -251,6 +291,7 @@ function AcademyPortalContent() {
 
   const handleStartEnrollWizard = (course: Course) => {
     setEnrollingCourse(course);
+    handleNavigateWithLogo('enroll', 'Preparing Course Matriculation...', course.title);
   };
 
   const handleEnrollCourse = async (courseId: number, enrollmentData?: any) => {
@@ -342,19 +383,26 @@ function AcademyPortalContent() {
     content: string,
     attachmentUrl?: string | null
   ) => {
-    const res = await authFetch('/api/homework', {
-      method: 'POST',
-      body: JSON.stringify({
-        courseId,
-        lessonId,
-        title,
-        content,
-        attachmentUrl,
-      }),
-    });
-    if (res.ok) {
-      await handleRefreshAll();
-      showToast('Homework submitted to Ustadh Mustaqeem Shaikh!');
+    try {
+      const res = await authFetch('/api/homework', {
+        method: 'POST',
+        body: JSON.stringify({
+          courseId,
+          lessonId,
+          title,
+          content: content || 'Homework submission attached.',
+          attachmentUrl,
+        }),
+      });
+      if (res.ok) {
+        await handleRefreshAll();
+        showToast('Homework successfully submitted to Ustadh Mustaqeem Shaikh!');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error || 'Failed to submit homework. Please try again.');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Network error while submitting homework.');
     }
   };
 
@@ -465,13 +513,16 @@ function AcademyPortalContent() {
         transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
         className="relative z-10 min-h-screen flex flex-col"
       >
+        {/* Grand Navigation Loading Logo Screen (Appears with glowing sacred logo when clicking navbar tabs) */}
+        <NavigationLoadingOverlay
+          isLoading={isPageNavigating}
+          message={navLoadingMessage}
+          targetViewTitle={navTargetTitle}
+        />
+
         <Navbar
           activeView={activeView}
-          onNavigate={(view) => {
-            setWatchingCourse(null);
-            setActiveView(view);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
+          onNavigate={(view) => handleNavigateWithLogo(view)}
           unreadCount={unreadCount}
           onReplayIntro={() => setShowSplash(true)}
           onSignedInSuccess={async (signedInProfile) => {
@@ -492,6 +543,7 @@ function AcademyPortalContent() {
           onStartEnroll={(c) => {
             setShowEnrollmentModalBox(false);
             setEnrollingCourse(c);
+            handleNavigateWithLogo('enroll', 'Preparing Course Matriculation...', c.title);
           }}
           onExploreCourses={() => {
             setShowEnrollmentModalBox(false);
@@ -537,6 +589,7 @@ function AcademyPortalContent() {
                   homeworkList={homework}
                   messages={messages}
                   isAdmin={Boolean(isAdmin)}
+                  currentProfile={profile}
                   onBack={() => setWatchingCourse(null)}
                   onEnroll={async (courseId) => {
                     const c = courses.find((item) => item.id === courseId) || watchingCourse;
@@ -572,7 +625,7 @@ function AcademyPortalContent() {
                   authFetch={authFetch}
                   onUploadFile={uploadMediaFile}
                   onRefreshData={handleRefreshAll}
-                  onNavigateToStudentDashboard={() => setActiveView('dashboard')}
+                  onNavigateToStudentDashboard={() => handleNavigateWithLogo('dashboard')}
                 />
               </motion.div>
             ) : activeView === 'dashboard' ? (
@@ -595,8 +648,12 @@ function AcademyPortalContent() {
                   onWatchCourse={(course) => setWatchingCourse(course)}
                   onEnrollCourse={async (courseId) => {
                     const c = courses.find((item) => item.id === courseId);
-                    if (c) setEnrollingCourse(c);
-                    else await handleEnrollCourse(courseId);
+                    if (c) {
+                      setEnrollingCourse(c);
+                      handleNavigateWithLogo('enroll', 'Preparing Course Matriculation...', c.title);
+                    } else {
+                      await handleEnrollCourse(courseId);
+                    }
                   }}
                   onToggleLessonProgress={handleToggleCourseLessonProgress}
                   onSendMessage={handleSendMessage}
@@ -605,7 +662,7 @@ function AcademyPortalContent() {
                   onGradeHomework={handleGradeHomework}
                   onSubmitFeedback={handleSubmitFeedback}
                   onUploadFile={uploadMediaFile}
-                  onBrowseCourses={() => setActiveView('courses')}
+                  onBrowseCourses={() => handleNavigateWithLogo('courses')}
                 />
               </motion.div>
             ) : activeView === 'calendar' ? (
@@ -623,6 +680,8 @@ function AcademyPortalContent() {
                   lessons={lessons}
                   enrolledCourseIds={enrolledCourseIds}
                   isAdmin={Boolean(isAdmin)}
+                  currentProfile={profile}
+                  isInstructor={profile?.role === 'instructor'}
                   calendarSettings={calendarSettings}
                   onUpdateCalendarSettings={handleUpdateCalendarSettings}
                   onEnrollCourse={async (courseId) => {
@@ -636,7 +695,7 @@ function AcademyPortalContent() {
                   }}
                   onOpenAdminSchedule={() => {
                     setAdminInitialModule('zoom_calendar');
-                    setActiveView('admin');
+                    handleNavigateWithLogo('admin');
                   }}
                 />
               </motion.div>
@@ -657,20 +716,14 @@ function AcademyPortalContent() {
                   isAdmin={Boolean(isAdmin)}
                   onWatchCourse={(course) => setWatchingCourse(course)}
                   onOpenCalendar={() => {
-                    setWatchingCourse(null);
-                    setActiveView('calendar');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    handleNavigateWithLogo('calendar');
                   }}
                   onOpenDashboard={() => {
-                    setWatchingCourse(null);
-                    setActiveView('dashboard');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    handleNavigateWithLogo('dashboard');
                   }}
                   onOpenTeacherStudio={() => {
-                    setWatchingCourse(null);
                     setAdminInitialModule('lessons');
-                    setActiveView('admin');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    handleNavigateWithLogo('admin');
                   }}
                   onUploadFile={uploadMediaFile}
                   onFacultyJoined={async (sessionToken, updatedProfile) => {
@@ -687,6 +740,33 @@ function AcademyPortalContent() {
                     setActiveView('admin');
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
+                />
+              </motion.div>
+            ) : activeView === 'enroll' ? (
+              <motion.div
+                key="enroll-view"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full"
+              >
+                <CoolEnrollmentView
+                  courses={publishedCourses}
+                  initialSelectedCourseId={enrollingCourse?.id || null}
+                  profile={profile}
+                  enrolledCourseIds={enrolledCourseIds}
+                  onCompleteEnrollment={async (courseId, enrollmentData) => {
+                    await handleEnrollCourse(courseId, enrollmentData);
+                  }}
+                  onOpenClassroom={(courseId) => {
+                    const c = courses.find((item) => item.id === courseId);
+                    if (c) {
+                      setWatchingCourse(c);
+                    }
+                  }}
+                  onOpenDashboard={() => handleNavigateWithLogo('dashboard')}
+                  onBackToCatalog={() => handleNavigateWithLogo('courses')}
                 />
               </motion.div>
             ) : (
@@ -740,16 +820,16 @@ function AcademyPortalContent() {
                         onExploreCourses={() => {
                           const el = document.getElementById('courses-section');
                           if (el) el.scrollIntoView({ behavior: 'smooth' });
-                          else setActiveView('courses');
+                          else handleNavigateWithLogo('courses');
                         }}
                         onOpenCalendar={() => {
                           const el = document.getElementById('calendar-section');
                           if (el) el.scrollIntoView({ behavior: 'smooth' });
-                          else setActiveView('calendar');
+                          else handleNavigateWithLogo('calendar');
                         }}
                         onOpenAdminSlides={() => {
                           setAdminInitialModule('homepage_media');
-                          setActiveView('admin');
+                          handleNavigateWithLogo('admin');
                         }}
                       />
                     </motion.div>
@@ -777,7 +857,7 @@ function AcademyPortalContent() {
                           type="button"
                           onClick={() => {
                             setAdminInitialModule('courses');
-                            setActiveView('admin');
+                            handleNavigateWithLogo('admin');
                           }}
                           className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-teal-400 text-slate-950 font-semibold hover:bg-teal-300 whitespace-nowrap"
                         >
@@ -788,7 +868,7 @@ function AcademyPortalContent() {
                           type="button"
                           onClick={() => {
                             setAdminInitialModule('lessons');
-                            setActiveView('admin');
+                            handleNavigateWithLogo('admin');
                           }}
                           className="flex items-center gap-1 px-3 py-1.5 rounded-md academy-surface hover:border-teal-400 whitespace-nowrap"
                         >
@@ -799,7 +879,7 @@ function AcademyPortalContent() {
                           type="button"
                           onClick={() => {
                             setAdminInitialModule('zoom_calendar');
-                            setActiveView('admin');
+                            handleNavigateWithLogo('admin');
                           }}
                           className="flex items-center gap-1 px-3 py-1.5 rounded-md academy-surface hover:border-teal-400 whitespace-nowrap"
                         >
@@ -1167,7 +1247,7 @@ function AcademyPortalContent() {
                             type="button"
                             onClick={() => {
                               setAdminInitialModule('courses');
-                              setActiveView('admin');
+                              handleNavigateWithLogo('admin');
                             }}
                             className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 whitespace-nowrap"
                           >
@@ -1197,6 +1277,8 @@ function AcademyPortalContent() {
                         lessons={lessons}
                         enrolledCourseIds={enrolledCourseIds}
                         isAdmin={Boolean(isAdmin)}
+                        currentProfile={profile}
+                        isInstructor={profile?.role === 'instructor'}
                         calendarSettings={calendarSettings}
                         onUpdateCalendarSettings={handleUpdateCalendarSettings}
                         onEnrollCourse={handleEnrollCourse}
@@ -1206,7 +1288,7 @@ function AcademyPortalContent() {
                         }}
                         onOpenAdminSchedule={() => {
                           setAdminInitialModule('zoom_calendar');
-                          setActiveView('admin');
+                          handleNavigateWithLogo('admin');
                         }}
                       />
                     </div>
@@ -1314,7 +1396,7 @@ function AcademyPortalContent() {
                           <div className="pt-2 flex flex-wrap items-center gap-3">
                             <button
                               type="button"
-                              onClick={() => setActiveView('dashboard')}
+                              onClick={() => handleNavigateWithLogo('dashboard')}
                               className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors whitespace-nowrap"
                             >
                               <Mail className="w-3.5 h-3.5" />
@@ -1322,7 +1404,7 @@ function AcademyPortalContent() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setActiveView('calendar')}
+                              onClick={() => handleNavigateWithLogo('calendar')}
                               className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400/50 transition-colors whitespace-nowrap"
                             >
                               <CalendarIcon className="w-3.5 h-3.5 text-teal-400" />
@@ -1369,10 +1451,7 @@ function AcademyPortalContent() {
                   <li>
                     <button
                       type="button"
-                      onClick={() => {
-                        setWatchingCourse(null);
-                        setActiveView('home');
-                      }}
+                      onClick={() => handleNavigateWithLogo('home')}
                       className="hover:text-teal-300"
                     >
                       Home &amp; Media Showcase
@@ -1381,10 +1460,7 @@ function AcademyPortalContent() {
                   <li>
                     <button
                       type="button"
-                      onClick={() => {
-                        setWatchingCourse(null);
-                        setActiveView('courses');
-                      }}
+                      onClick={() => handleNavigateWithLogo('courses')}
                       className="hover:text-teal-300"
                     >
                       Course Catalog &amp; Syllabi
@@ -1393,11 +1469,16 @@ function AcademyPortalContent() {
                   <li>
                     <button
                       type="button"
-                      onClick={() => {
-                        setWatchingCourse(null);
-                        setActiveView('faculty');
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
+                      onClick={() => handleNavigateWithLogo('enroll')}
+                      className="hover:text-emerald-300 text-emerald-400 font-semibold"
+                    >
+                      Enroll in 2026/1447 Cohort ✨
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => handleNavigateWithLogo('faculty')}
                       className="hover:text-teal-300"
                     >
                       Our Faculty &amp; Academic Council
@@ -1406,10 +1487,7 @@ function AcademyPortalContent() {
                   <li>
                     <button
                       type="button"
-                      onClick={() => {
-                        setWatchingCourse(null);
-                        setActiveView('calendar');
-                      }}
+                      onClick={() => handleNavigateWithLogo('calendar')}
                       className="hover:text-teal-300"
                     >
                       Global Timezone Calendar
@@ -1418,10 +1496,7 @@ function AcademyPortalContent() {
                   <li>
                     <button
                       type="button"
-                      onClick={() => {
-                        setWatchingCourse(null);
-                        setActiveView('dashboard');
-                      }}
+                      onClick={() => handleNavigateWithLogo('dashboard')}
                       className="hover:text-teal-300"
                     >
                       Student Dashboard, Tutor Chat &amp; Homework
@@ -1432,9 +1507,8 @@ function AcademyPortalContent() {
                       <button
                         type="button"
                         onClick={() => {
-                          setWatchingCourse(null);
                           setAdminInitialModule('lessons');
-                          setActiveView('admin');
+                          handleNavigateWithLogo('admin');
                         }}
                         className="hover:text-teal-300 text-teal-400 font-medium"
                       >
@@ -1446,10 +1520,7 @@ function AcademyPortalContent() {
                     <li>
                       <button
                         type="button"
-                        onClick={() => {
-                          setWatchingCourse(null);
-                          setActiveView('admin');
-                        }}
+                        onClick={() => handleNavigateWithLogo('admin')}
                         className="hover:text-teal-300 text-amber-300 font-medium"
                       >
                         Academy Admin Portal (/admin)
