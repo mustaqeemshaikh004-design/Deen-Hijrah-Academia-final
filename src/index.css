@@ -41,10 +41,36 @@
     text-wrap: balance;
   }
 
+  .font-brand-emblem {
+    font-family: 'Cinzel Decorative', 'Cinzel', 'Cormorant Garamond', Georgia, serif;
+    letter-spacing: 0.08em;
+  }
+
+  .font-serif-sacred {
+    font-family: 'Cormorant Garamond', 'Cinzel', Georgia, serif;
+  }
+
   .font-mono-tabular {
     font-family: 'JetBrains Mono', monospace;
     font-variant-numeric: tabular-nums;
   }
+}
+
+@keyframes marqueeContinuous {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee-infinite {
+  animation: marqueeContinuous 38s linear infinite;
+}
+
+.animate-marquee-infinite:hover {
+  animation-play-state: paused;
 }
 
 .academy-canvas {

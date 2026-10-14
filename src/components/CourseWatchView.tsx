@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft,
@@ -27,8 +27,11 @@ import {
   ChevronRight,
   ChevronLeft,
   Film,
+  Megaphone,
 } from 'lucide-react';
 import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
+import { LessonThreadedComments } from './LessonThreadedComments.tsx';
+import { ClassSessionSurveyWidget } from './ClassSessionSurveyWidget.tsx';
 import {
   Course,
   Lesson,
@@ -39,6 +42,8 @@ import {
   HomeworkGradeStatus,
   Message,
   Profile,
+  Announcement,
+  LessonComment,
   parseCourseTags,
 } from '../types.ts';
 import { resolveThumbnailUrl, ACADEMY_ASSETS } from '../lib/assets.ts';
@@ -48,6 +53,7 @@ import {
   convertClassTimeToRegion,
   getDetectedUserTimezone,
 } from '../lib/timezone.ts';
+import { smartApiFetch } from '../lib/fallbackStore.ts';
 
 export type ResourceFileType = 'PDF' | 'Doc' | 'Link';
 
@@ -136,8 +142,10 @@ interface CourseWatchViewProps {
   enrollment?: Enrollment;
   homeworkList: HomeworkSubmission[];
   messages?: Message[];
+  announcements?: Announcement[];
   isAdmin: boolean;
   currentProfile?: Profile | null;
+  authFetch?: (url: string, options?: RequestInit) => Promise<Response>;
   onBack: () => void;
   onEnroll: (courseId: number) => Promise<void>;
   onToggleLessonComplete: (lessonId: number) => Promise<void>;
@@ -192,8 +200,10 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
   enrollment,
   homeworkList,
   messages = [],
+  announcements = [],
   isAdmin,
   currentProfile = null,
+  authFetch,
   onBack,
   onEnroll,
   onToggleLessonComplete,
@@ -202,6 +212,16 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
   onSubmitFeedback,
   onUploadFile,
 }) => {
+  // Course-specific announcements
+  const courseAnnouncements = useMemo(() => {
+    return announcements.filter(
+      (a) => !a.courseId || a.courseId === course.id
+    );
+  }, [announcements, course.id]);
+
+  // Threaded Comments state for active lesson
+  const [lessonComments, setLessonComments] = useState<LessonComment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
   const courseLessons = useMemo(
     () =>
       lessons
@@ -372,37 +392,19 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
   };
 
   // Build downloadable curriculum resource items (PDF, Doc, Link) for a lesson
+  // STRICT RULE: ONLY return resources if actually uploaded/added by the instructor!
   const getLessonDownloadableResources = (lesson: Lesson): CurriculumResourceItem[] => {
-    const defaultPdfUrl =
-      'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
     const rawAttachment = (lesson.attachmentUrl || '').trim();
+    if (!rawAttachment) {
+      return [];
+    }
 
-    // Generate a real downloadable .doc study worksheet tailored to this lesson
-    const docBody = [
-      `${course.title.toUpperCase()} — SEMINAR STUDY WORKSHEET (.DOC)`,
-      `Faculty: Ustadh ${course.instructorName}`,
-      `Lesson #${lesson.positionOrder}: ${lesson.title}`,
-      `Duration: ${lesson.duration}`,
-      ``,
-      `1. LECTURE SYNOPSIS & CORE THEMES`,
-      `${lesson.description}`,
-      ``,
-      `2. GUIDED SEMINAR REFLECTION QUESTIONS`,
-      `- Summarize the primary textual proofs and historical context discussed in "${lesson.title}".`,
-      `- Note key Arabic terminology, morphological roots, or legal maxims covered in this session.`,
-      `- Prepare two analytical questions for the upcoming live Zoom seminar with Ustadh ${course.instructorName}.`,
-    ].join('\n');
+    // Never return the dummy.pdf placeholder
+    if (rawAttachment.includes('dummy.pdf')) {
+      return [];
+    }
 
-    const generatedDocDataUri = `data:application/msword;charset=utf-8,${encodeURIComponent(
-      docBody
-    )}`;
-    const safeSlug =
-      lesson.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '') || `lesson-${lesson.positionOrder}`;
-
-    // If the admin pasted a JSON list of resources, parse and return them
+    // If the instructor provided a JSON list of resources, parse and return them
     if (rawAttachment.startsWith('[')) {
       try {
         const parsed = JSON.parse(rawAttachment);
@@ -411,52 +413,106 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
             const type: ResourceFileType =
               item.type === 'PDF' || item.type === 'Doc' || item.type === 'Link'
                 ? item.type
-                : detectResourceFileType(item.url);
+                : detectResourceFileType(item.url || '');
             return {
               id: `${lesson.id}-custom-${idx}`,
               type,
               title: item.title || `${type} Resource`,
-              url: item.url || defaultPdfUrl,
+              url: item.url,
+              downloadFilename: item.downloadFilename,
             };
           });
         }
       } catch {
-        // Fall through to standard resource list
+        // Fall through
       }
     }
 
-    const customType = rawAttachment ? detectResourceFileType(rawAttachment) : 'PDF';
-    const pdfUrl =
-      rawAttachment && customType === 'PDF' ? rawAttachment : defaultPdfUrl;
-    const docUrl =
-      rawAttachment && customType === 'Doc' ? rawAttachment : generatedDocDataUri;
-    const linkUrl =
-      rawAttachment && customType === 'Link'
-        ? rawAttachment
-        : `https://quran.com/?ref=deenhijrah-lesson-${lesson.positionOrder}`;
+    const customType = detectResourceFileType(rawAttachment);
+    const fileName =
+      rawAttachment.split('/').pop()?.split('?')[0] || `${customType} Resource`;
 
     return [
       {
-        id: `${lesson.id}-pdf`,
-        type: 'PDF',
-        title: `Lecture Folio & Slides.pdf`,
-        url: pdfUrl,
-      },
-      {
-        id: `${lesson.id}-doc`,
-        type: 'Doc',
-        title: `Seminar Study Guide.docx`,
-        url: docUrl,
-        downloadFilename:
-          rawAttachment && customType === 'Doc' ? undefined : `${safeSlug}-study-guide.doc`,
-      },
-      {
-        id: `${lesson.id}-link`,
-        type: 'Link',
-        title: `Primary Source Archive`,
-        url: linkUrl,
+        id: `${lesson.id}-resource`,
+        type: customType,
+        title: fileName,
+        url: rawAttachment,
+        downloadFilename: customType !== 'Link' ? fileName : undefined,
       },
     ];
+  };
+
+  // Fetch comments whenever active lesson changes
+  useEffect(() => {
+    if (!currentLesson?.id) return;
+    let isMounted = true;
+    setLoadingComments(true);
+    smartApiFetch(`/api/lessons/${currentLesson.id}/comments`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (isMounted) setLessonComments(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (isMounted) setLessonComments([]);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingComments(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [currentLesson?.id]);
+
+  const handlePostComment = async (
+    lessonId: number,
+    content: string,
+    parentId?: number | null
+  ) => {
+    const fetchFn = authFetch || smartApiFetch;
+    try {
+      const res = await fetchFn(`/api/lessons/${lessonId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          parentId: parentId || null,
+        }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setLessonComments((prev) => [...prev, created]);
+      } else {
+        // Optimistic local fallback comment
+        const fallbackComment: LessonComment = {
+          id: Date.now(),
+          courseId: course.id,
+          lessonId,
+          authorId: currentProfile?.id || 1,
+          authorName: currentProfile?.fullName || 'Student',
+          authorRole: currentProfile?.role || 'student',
+          authorAvatar: currentProfile?.avatarUrl || null,
+          content,
+          parentId: parentId || null,
+          createdAt: new Date().toISOString(),
+        };
+        setLessonComments((prev) => [...prev, fallbackComment]);
+      }
+    } catch {
+      const fallbackComment: LessonComment = {
+        id: Date.now(),
+        courseId: course.id,
+        lessonId,
+        authorId: currentProfile?.id || 1,
+        authorName: currentProfile?.fullName || 'Student',
+        authorRole: currentProfile?.role || 'student',
+        authorAvatar: currentProfile?.avatarUrl || null,
+        content,
+        parentId: parentId || null,
+        createdAt: new Date().toISOString(),
+      };
+      setLessonComments((prev) => [...prev, fallbackComment]);
+    }
   };
 
   const handleToggleComplete = async (lessonId: number) => {
@@ -1506,8 +1562,43 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
-            className="space-y-8"
+            className="space-y-6"
           >
+            {/* Instructor Course Announcements */}
+            {courseAnnouncements.length > 0 && (
+              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-teal-950/40 via-slate-900 to-slate-950 border border-teal-500/30 space-y-3 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-teal-300 font-display">
+                    <Megaphone className="w-4 h-4 text-teal-400 shrink-0" />
+                    <span>Instructor Announcements ({courseAnnouncements.length})</span>
+                  </div>
+                  <span className="text-[11px] font-mono-tabular text-teal-400/80">
+                    Ustadh {course.instructorName}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {courseAnnouncements.map((ann) => (
+                    <div
+                      key={ann.id}
+                      className="p-3.5 rounded-xl academy-elevated border border-slate-800/80 space-y-1"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-xs font-bold text-white">{ann.title}</h4>
+                        {ann.priority === 'important' && (
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                            Important
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs academy-text-secondary leading-relaxed">
+                        {ann.content}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div
               className={`grid grid-cols-1 ${
                 isTheaterMode ? 'lg:grid-cols-1' : 'lg:grid-cols-12'
@@ -1576,6 +1667,18 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
                         />
+                      ) : !(resolvedVideoUrl || currentLesson.videoUrl) ? (
+                        <div className="w-full aspect-video flex flex-col items-center justify-center p-8 text-center bg-slate-950/95 border border-slate-800 space-y-3">
+                          <div className="p-3.5 rounded-2xl bg-teal-500/10 text-teal-400">
+                            <Film className="w-8 h-8" />
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-200 font-display">
+                            Lecture Recording in Preparation
+                          </h4>
+                          <p className="text-xs academy-text-secondary max-w-md">
+                            Ustadh {course.instructorName} uploads the official high-definition lecture recording following the live class. Check back shortly or attend the upcoming live Zoom session.
+                          </p>
+                        </div>
                       ) : (
                         <video
                           key={`${resolvedVideoUrl || currentLesson.videoUrl}-${currentLesson.id}`}
@@ -1620,6 +1723,7 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
 
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
                           {canWatchCurrentLesson &&
+                            getLessonDownloadableResources(currentLesson).length > 0 &&
                             getLessonDownloadableResources(currentLesson).map((res) => (
                               <div key={res.id} className="flex items-center gap-1.5">
                                 {(res.type === 'PDF' || res.url.includes('.pdf') || res.url.startsWith('data:') || res.url.startsWith('/api/media/')) && (
@@ -1664,8 +1768,8 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                               onClick={() => handleToggleComplete(currentLesson.id)}
                               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
                                 completedIds.includes(currentLesson.id)
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                  : 'bg-teal-400 text-slate-950 hover:bg-teal-300'
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                    : 'bg-teal-400 text-slate-950 hover:bg-teal-300'
                               }`}
                             >
                               <CheckCircle2 className="w-4 h-4" />
@@ -1688,6 +1792,40 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                         </p>
                       </div>
                     </div>
+
+                    {/* Daily Quick Session Survey (Satisfactory / Unsatisfactory) */}
+                    <ClassSessionSurveyWidget
+                      courseId={course.id}
+                      courseTitle={course.title}
+                      lessonId={currentLesson.id}
+                      lessonTitle={currentLesson.title}
+                      instructorName={course.instructorName}
+                      currentProfile={currentProfile}
+                      onSubmitSurvey={async (rating, comment) => {
+                        const fetchFn = authFetch || smartApiFetch;
+                        await fetchFn('/api/class-surveys', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            courseId: course.id,
+                            lessonId: currentLesson.id,
+                            instructorId: course.instructorId || null,
+                            rating,
+                            comment,
+                          }),
+                        });
+                      }}
+                    />
+
+                    {/* Threaded Comment System Under Lesson & Recording */}
+                    <LessonThreadedComments
+                      lessonId={currentLesson.id}
+                      lessonTitle={currentLesson.title}
+                      courseId={course.id}
+                      comments={lessonComments}
+                      currentProfile={currentProfile}
+                      onPostComment={handlePostComment}
+                    />
                   </>
                 ) : (
                   <div className="rounded-xl academy-surface p-10 text-center">
@@ -1794,24 +1932,6 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                       placeholder="Search lecture by title or topic..."
                       className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-slate-900 border border-slate-800 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-teal-400"
                     />
-                  </div>
-
-                  {/* File-Type Icon Legend (PDF, Doc, Link) */}
-                  <div className="flex items-center gap-3 pt-0.5 text-[11px] academy-text-secondary">
-                    <span className="inline-flex items-center gap-1.5 font-medium text-rose-300">
-                      <ResourceFileTypeIcon type="PDF" size="sm" />
-                      <span>PDF</span>
-                    </span>
-                    <span aria-hidden="true">·</span>
-                    <span className="inline-flex items-center gap-1.5 font-medium text-sky-300">
-                      <ResourceFileTypeIcon type="Doc" size="sm" />
-                      <span>Doc</span>
-                    </span>
-                    <span aria-hidden="true">·</span>
-                    <span className="inline-flex items-center gap-1.5 font-medium text-teal-300">
-                      <ResourceFileTypeIcon type="Link" size="sm" />
-                      <span>Link</span>
-                    </span>
                   </div>
 
                   <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
@@ -1924,76 +2044,78 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                                 </span>
                               </div>
 
-                            {/* Downloadable Resource Items in Curriculum Sidebar with Specific, Distinct File-Type Icons (PDF, Doc, Link) */}
-                            <div className="pt-2 border-t academy-divider space-y-1.5">
-                              <div className="text-[10px] font-semibold uppercase tracking-wider academy-text-muted">
-                                Downloadable Resources
-                              </div>
-                              <div className="space-y-1">
-                                {lessonResources.map((res) => {
-                                  const typeColorClass =
-                                    res.type === 'PDF'
-                                      ? 'text-rose-400'
-                                      : res.type === 'Doc'
-                                      ? 'text-sky-400'
-                                      : 'text-teal-400';
+                            {/* Downloadable Resource Items in Curriculum Sidebar (ONLY IF INSTRUCTOR ADDED ATTACHMENT) */}
+                            {lessonResources.length > 0 && (
+                              <div className="pt-2 border-t academy-divider space-y-1.5">
+                                <div className="text-[10px] font-semibold uppercase tracking-wider academy-text-muted">
+                                  Downloadable Resources
+                                </div>
+                                <div className="space-y-1">
+                                  {lessonResources.map((res) => {
+                                    const typeColorClass =
+                                      res.type === 'PDF'
+                                        ? 'text-rose-400'
+                                        : res.type === 'Doc'
+                                        ? 'text-sky-400'
+                                        : 'text-teal-400';
 
-                                  return isUnlocked ? (
-                                    <a
-                                      key={res.id}
-                                      href={res.url}
-                                      download={res.downloadFilename}
-                                      target={res.downloadFilename ? undefined : '_blank'}
-                                      rel="noopener noreferrer"
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md academy-surface hover:border-teal-400/50 transition-colors text-[11px] group"
-                                    >
-                                      <span className="flex items-center gap-2 min-w-0">
-                                        <ResourceFileTypeIcon type={res.type} size="sm" />
-                                        <span
-                                          className={`font-mono-tabular font-semibold shrink-0 ${typeColorClass}`}
-                                        >
-                                          {res.type}
+                                    return isUnlocked ? (
+                                      <a
+                                        key={res.id}
+                                        href={res.url}
+                                        download={res.downloadFilename}
+                                        target={res.downloadFilename ? undefined : '_blank'}
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md academy-surface hover:border-teal-400/50 transition-colors text-[11px] group"
+                                      >
+                                        <span className="flex items-center gap-2 min-w-0">
+                                          <ResourceFileTypeIcon type={res.type} size="sm" />
+                                          <span
+                                            className={`font-mono-tabular font-semibold shrink-0 ${typeColorClass}`}
+                                          >
+                                            {res.type}
+                                          </span>
+                                          <span aria-hidden="true" className="academy-text-muted">
+                                            ·
+                                          </span>
+                                          <span className="truncate font-medium academy-text-secondary group-hover:text-white transition-colors">
+                                            {res.title}
+                                          </span>
                                         </span>
-                                        <span aria-hidden="true" className="academy-text-muted">
-                                          ·
+                                        {res.type === 'Link' ? (
+                                          <ExternalLink className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                                        ) : (
+                                          <Download className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                                        )}
+                                      </a>
+                                    ) : (
+                                      <div
+                                        key={res.id}
+                                        title="Enroll in this course to unlock downloadable resources"
+                                        className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md academy-surface opacity-75 text-[11px]"
+                                      >
+                                        <span className="flex items-center gap-2 min-w-0">
+                                          <ResourceFileTypeIcon type={res.type} size="sm" />
+                                          <span
+                                            className={`font-mono-tabular font-semibold shrink-0 ${typeColorClass}`}
+                                          >
+                                            {res.type}
+                                          </span>
+                                          <span aria-hidden="true" className="academy-text-muted">
+                                            ·
+                                          </span>
+                                          <span className="truncate academy-text-muted">
+                                            {res.title}
+                                          </span>
                                         </span>
-                                        <span className="truncate font-medium academy-text-secondary group-hover:text-white transition-colors">
-                                          {res.title}
-                                        </span>
-                                      </span>
-                                      {res.type === 'Link' ? (
-                                        <ExternalLink className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                                      ) : (
-                                        <Download className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                                      )}
-                                    </a>
-                                  ) : (
-                                    <div
-                                      key={res.id}
-                                      title="Enroll in this course to unlock downloadable resources"
-                                      className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md academy-surface opacity-75 text-[11px]"
-                                    >
-                                      <span className="flex items-center gap-2 min-w-0">
-                                        <ResourceFileTypeIcon type={res.type} size="sm" />
-                                        <span
-                                          className={`font-mono-tabular font-semibold shrink-0 ${typeColorClass}`}
-                                        >
-                                          {res.type}
-                                        </span>
-                                        <span aria-hidden="true" className="academy-text-muted">
-                                          ·
-                                        </span>
-                                        <span className="truncate academy-text-muted">
-                                          {res.title}
-                                        </span>
-                                      </span>
-                                      <Lock className="w-3 h-3 text-amber-400 shrink-0" />
-                                    </div>
-                                  );
-                                })}
+                                        <Lock className="w-3 h-3 text-amber-400 shrink-0" />
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         </div>
                       </div>

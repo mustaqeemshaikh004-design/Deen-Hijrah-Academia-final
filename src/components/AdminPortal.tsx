@@ -31,6 +31,14 @@ import {
   Copy,
   Check,
   ExternalLink,
+  Megaphone,
+  ThumbsUp,
+  ThumbsDown,
+  ShieldCheck,
+  GraduationCap,
+  ChevronRight,
+  ChevronLeft,
+  Search,
 } from 'lucide-react';
 import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
 import { ZoomMeetingLauncherModal } from './ZoomMeetingLauncherModal.tsx';
@@ -52,6 +60,9 @@ import {
   Message,
   SyllabusBox,
   HomeworkSubmission,
+  Announcement,
+  RoleApplication,
+  ClassSurvey,
   parseCourseTags,
 } from '../types.ts';
 import { PRESET_THUMBNAILS, resolveThumbnailUrl, ACADEMY_ASSETS } from '../lib/assets.ts';
@@ -64,7 +75,11 @@ export type AdminModule =
   | 'homework'
   | 'homepage_media'
   | 'inbox'
-  | 'users';
+  | 'users'
+  | 'teacher_students'
+  | 'applications'
+  | 'announcements'
+  | 'surveys';
 
 interface AdminPortalProps {
   initialModule?: AdminModule;
@@ -77,6 +92,8 @@ interface AdminPortalProps {
   enrollments: Enrollment[];
   messages: Message[];
   homework: HomeworkSubmission[];
+  announcements?: Announcement[];
+  roleApplications?: RoleApplication[];
   authFetch: (url: string, options?: RequestInit) => Promise<Response>;
   onUploadFile: (file: File) => Promise<string>;
   onRefreshData: () => Promise<void>;
@@ -94,6 +111,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   enrollments,
   messages,
   homework,
+  announcements = [],
+  roleApplications = [],
   authFetch,
   onUploadFile,
   onRefreshData,
@@ -103,18 +122,73 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const isFullAdmin = profile?.role === 'admin';
   const isInstructor = profile?.role === 'instructor';
 
+  // Toggle between Full Admin View and Dedicated Teacher Dashboard (for admins and teachers)
+  const [isTeacherMode, setIsTeacherMode] = useState<boolean>(() => {
+    return isInstructor || (!isFullAdmin ? true : false);
+  });
+
+  // State for inspecting an individual student's course dashboard (showing ONLY the course this teacher teaches!)
+  const [selectedStudentCourseDashboard, setSelectedStudentCourseDashboard] = useState<{
+    student: Profile;
+    course: Course;
+    enrollment: Enrollment;
+  } | null>(null);
+
+  // New Course Announcement state
+  const [newAnnTitle, setNewAnnTitle] = useState('');
+  const [newAnnContent, setNewAnnContent] = useState('');
+  const [newAnnCourseId, setNewAnnCourseId] = useState<number | 'all'>('all');
+  const [newAnnPriority, setNewAnnPriority] = useState<'normal' | 'important'>('normal');
+  const [isPostingAnn, setIsPostingAnn] = useState(false);
+
+  // Teacher Student Roster & Dashboard inspection state
+  const [teacherStudentSearch, setTeacherStudentSearch] = useState('');
+  const [teacherCourseFilter, setTeacherCourseFilter] = useState<number | 'all'>('all');
+  const [directStudentMessage, setDirectStudentMessage] = useState('');
+  const [sendingDirectMessage, setSendingDirectMessage] = useState(false);
+
+  // Role applications filter
+  const [appStatusFilter, setAppStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+
+  // Class Surveys state
+  const [classSurveys, setClassSurveys] = useState<ClassSurvey[]>([]);
+  const [surveyCourseFilter, setSurveyCourseFilter] = useState<number | 'all'>('all');
+  const [loadingSurveys, setLoadingSurveys] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoadingSurveys(true);
+    authFetch('/api/class-surveys')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (isMounted) setClassSurveys(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (isMounted) setClassSurveys([]);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingSurveys(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [authFetch]);
+
   // Strict Scoped Teacher Permissions: Teachers only see & manage their assigned courses
   const managedCourses = useMemo(() => {
-    if (isFullAdmin) return courses;
-    if (isInstructor && profile) {
-      return courses.filter(
+    if (!isTeacherMode && isFullAdmin) return courses;
+    if (profile) {
+      const filtered = courses.filter(
         (c) =>
           c.instructorId === profile.id ||
           c.instructorName.trim().toLowerCase() === profile.fullName.trim().toLowerCase()
       );
+      // If full admin switched to teacher mode and has no courses with their exact name, allow them to view all courses they teach
+      if (filtered.length === 0 && isFullAdmin) return courses;
+      return filtered;
     }
-    return [];
-  }, [courses, isFullAdmin, isInstructor, profile]);
+    return courses;
+  }, [courses, isFullAdmin, isTeacherMode, profile]);
 
   const managedCourseIds = useMemo(() => managedCourses.map((c) => c.id), [managedCourses]);
 
@@ -783,29 +857,43 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       {/* Top Admin / Teacher Studio Control Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 mb-6 border-b academy-divider">
         <div>
-          <div className="text-xs font-medium text-teal-400">
-            {isFullAdmin
-              ? 'Admin Portal (/admin) · Faculty Control Center · Principal Faculty: Mustaqeem Shaikh'
-              : `Teacher Studio · Course Instructor Workspace · ${profile?.fullName || 'Faculty'}`}
+          <div className="text-xs font-semibold text-teal-400 font-mono-tabular">
+            {isTeacherMode
+              ? `Faculty & Teacher Portal · Instructor Workspace · ${profile?.fullName || 'Ustadh Mustaqeem Shaikh'}`
+              : 'Academy Director Portal (/admin) · Principal Faculty: Mustaqeem Shaikh'}
           </div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold mt-1">
-            {isFullAdmin
-              ? 'Academy Curriculum, Syllabi, Recordings & Global Calendar Manager'
-              : 'Course Recordings, Syllabi & Student Homework Workspace'}
+          <h1 className="font-display text-2xl sm:text-3xl font-bold mt-1 text-white">
+            {isTeacherMode
+              ? 'Course Teaching Studio, Student Dashboards & Grading'
+              : 'Academy Curriculum, Syllabi, Recordings, Access & Schedule Manager'}
           </h1>
-          {isInstructor && (
-            <p className="text-xs academy-text-secondary mt-1">
-              Scoped Teacher Access: You can upload lecture recordings, manage course syllabus modules,
-              schedule live Zoom seminars, and grade student submissions for your assigned courses (
-              <strong className="text-teal-300">
-                {managedCourses.map((c) => c.title).join(', ') || 'Assigned Course'}
-              </strong>
-              ). Full Academy Admin privileges remain exclusively with Founder Mustaqeem Shaikh.
-            </p>
-          )}
+          <p className="text-xs academy-text-secondary mt-1">
+            {isTeacherMode
+              ? `Teacher Dashboard: Manage course recordings, grade student homework, view session surveys, and inspect student dashboards for your courses.`
+              : 'Director Portal: Full academy administrative access, course creation, user roles, access applications, and site configuration.'}
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          {isFullAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                const nextMode = !isTeacherMode;
+                setIsTeacherMode(nextMode);
+                setActiveModule(nextMode ? 'teacher_students' : 'courses');
+              }}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer ${
+                isTeacherMode
+                  ? 'bg-amber-400 text-slate-950 hover:bg-amber-300 ring-2 ring-amber-400/50'
+                  : 'bg-teal-500/20 text-teal-300 border border-teal-500/40 hover:bg-teal-500/30'
+              }`}
+            >
+              <GraduationCap className="w-4 h-4" />
+              <span>{isTeacherMode ? 'Switch to Full Admin Director' : 'Switch to Teacher Dashboard'}</span>
+            </button>
+          )}
+
           {lastSavedAt && (
             <span className="text-xs font-medium text-emerald-400 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
               <CheckCircle2 className="w-3.5 h-3.5" />
@@ -914,35 +1002,55 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Sidebar Navigation (3 Columns) */}
         <aside className="lg:col-span-3 rounded-xl academy-surface p-4 space-y-1.5">
-          {(isInstructor
+          {(isTeacherMode
             ? [
                 {
-                  id: 'lessons',
-                  label: 'Upload Recordings',
-                  icon: Video,
-                  count: managedLessons.length,
+                  id: 'teacher_students',
+                  label: 'Students & Course Dashboards',
+                  icon: Users,
+                  count: enrollments.filter((e) => managedCourseIds.includes(e.courseId)).length,
                 },
                 {
                   id: 'courses',
-                  label: 'My Courses & Syllabus',
+                  label: 'My Courses & Syllabi',
                   icon: BookOpen,
                   count: managedCourses.length,
                 },
                 {
-                  id: 'zoom_calendar',
-                  label: 'Live Zoom & Schedule',
-                  icon: Calendar,
-                  count: managedEvents.length,
+                  id: 'lessons',
+                  label: 'Upload Class Recordings',
+                  icon: Video,
+                  count: managedLessons.length,
                 },
                 {
                   id: 'homework',
-                  label: 'Grade Homework',
+                  label: 'Grade Student Homework',
                   icon: FileText,
                   count: managedHomework.length,
                 },
                 {
+                  id: 'announcements',
+                  label: 'Post Course Announcements',
+                  icon: Megaphone,
+                  count: announcements.filter(
+                    (a) => !a.courseId || managedCourseIds.includes(a.courseId)
+                  ).length,
+                },
+                {
+                  id: 'surveys',
+                  label: 'Daily Session Surveys',
+                  icon: ThumbsUp,
+                  count: classSurveys.filter((s) => managedCourseIds.includes(s.courseId)).length,
+                },
+                {
+                  id: 'zoom_calendar',
+                  label: 'Live Zoom Schedule',
+                  icon: Calendar,
+                  count: managedEvents.length,
+                },
+                {
                   id: 'inbox',
-                  label: 'Tutor Chat & Inbox',
+                  label: 'Student Messages',
                   icon: Mail,
                   count: unreadMessagesCount,
                 },
@@ -950,13 +1058,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             : [
                 {
                   id: 'courses',
-                  label: 'Courses, Syllabus & Limits',
+                  label: 'Courses & Syllabus Manager',
                   icon: BookOpen,
                   count: courses.length,
                 },
                 {
                   id: 'lessons',
-                  label: 'Upload Recordings',
+                  label: 'Lecture Recordings Vault',
                   icon: Video,
                   count: lessons.length,
                 },
@@ -968,9 +1076,33 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 },
                 {
                   id: 'homework',
-                  label: 'Student Homework',
+                  label: 'All Student Homework',
                   icon: FileText,
                   count: homework.length,
+                },
+                {
+                  id: 'announcements',
+                  label: 'Academy Announcements',
+                  icon: Megaphone,
+                  count: announcements.length,
+                },
+                {
+                  id: 'surveys',
+                  label: 'Student Feedback & Surveys',
+                  icon: ThumbsUp,
+                  count: classSurveys.length,
+                },
+                {
+                  id: 'applications',
+                  label: 'Admin Access Requests',
+                  icon: ShieldCheck,
+                  count: roleApplications.filter((a) => a.status === 'pending').length,
+                },
+                {
+                  id: 'users',
+                  label: 'Faculty (MS) & User Roles',
+                  icon: Users,
+                  count: profiles.length,
                 },
                 {
                   id: 'homepage_media',
@@ -983,12 +1115,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   label: 'Tutor Chat & Inbox',
                   icon: Mail,
                   count: unreadMessagesCount,
-                },
-                {
-                  id: 'users',
-                  label: 'Faculty (MS) & Enrollments',
-                  icon: Users,
-                  count: profiles.length,
                 },
               ]
           ).map((item) => {
@@ -3630,6 +3756,1021 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   })}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* MODULE: TEACHER STUDENTS & DEDICATED STUDENT COURSE DASHBOARD */}
+          {activeModule === 'teacher_students' && (
+            <div className="space-y-6">
+              {selectedStudentCourseDashboard ? (
+                /* Dedicated Student Course Dashboard (STRICTLY scoped to the course this teacher teaches!) */
+                <div className="rounded-xl academy-surface p-6 space-y-6">
+                  {/* Top Bar with Back Button */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b academy-divider">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStudentCourseDashboard(null)}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl academy-elevated hover:border-teal-400 text-teal-300 text-xs font-semibold transition-colors cursor-pointer w-fit"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      <span>Back to Student Roster</span>
+                    </button>
+
+                    <div className="text-right">
+                      <span className="text-[11px] font-mono-tabular text-teal-400 uppercase font-semibold">
+                        Instructor View · Course-Scoped Dashboard
+                      </span>
+                      <h2 className="text-base font-bold text-white">
+                        {selectedStudentCourseDashboard.course.title}
+                      </h2>
+                    </div>
+                  </div>
+
+                  {/* Student Profile & Progress Card */}
+                  <div className="p-5 rounded-xl bg-gradient-to-r from-teal-950/40 via-slate-900 to-slate-950 border border-teal-500/30 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-teal-500/20 border border-teal-400/40 flex items-center justify-center text-teal-300 font-bold text-xl uppercase shrink-0">
+                        {selectedStudentCourseDashboard.student.fullName.charAt(0) || 'S'}
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-display text-lg font-bold text-white">
+                            {selectedStudentCourseDashboard.student.fullName}
+                          </h3>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-teal-400/20 text-teal-300 border border-teal-400/30 font-mono-tabular">
+                            {selectedStudentCourseDashboard.student.role}
+                          </span>
+                        </div>
+                        <p className="text-xs academy-text-secondary">
+                          {selectedStudentCourseDashboard.student.email} · Enrolled since{' '}
+                          {selectedStudentCourseDashboard.enrollment.enrolledAt
+                            ? new Date(selectedStudentCourseDashboard.enrollment.enrolledAt).toLocaleDateString()
+                            : 'Cohort Start'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="w-full md:w-64 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-teal-400 font-semibold">Course Progress</span>
+                        <span className="font-mono-tabular font-bold text-white">
+                          {selectedStudentCourseDashboard.enrollment.progressPercentage}% Completed
+                        </span>
+                      </div>
+                      <div className="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-teal-400 to-emerald-400 transition-all duration-300"
+                          style={{
+                            width: `${selectedStudentCourseDashboard.enrollment.progressPercentage}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tabbed / Grid breakdown for this Course */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                    {/* Left Column: Course Curriculum & Lesson Completion Checklist */}
+                    <div className="rounded-xl academy-elevated p-5 space-y-4">
+                      <div className="flex items-center justify-between pb-2 border-b academy-divider">
+                        <h4 className="font-display text-sm font-bold text-teal-300 flex items-center gap-2">
+                          <BookOpen className="w-4 h-4 text-teal-400" />
+                          <span>Course Lessons Checklist</span>
+                        </h4>
+                        <span className="text-xs font-mono-tabular academy-text-muted">
+                          {
+                            lessons.filter((l) => l.courseId === selectedStudentCourseDashboard.course.id)
+                              .length
+                          }{' '}
+                          Total Lectures
+                        </span>
+                      </div>
+
+                      <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                        {lessons
+                          .filter((l) => l.courseId === selectedStudentCourseDashboard.course.id)
+                          .sort((a, b) => a.positionOrder - b.positionOrder)
+                          .map((l) => {
+                            // Check completed IDs
+                            let isCompleted = false;
+                            try {
+                              if (selectedStudentCourseDashboard.enrollment.completedLessonIds) {
+                                const parsed = JSON.parse(
+                                  selectedStudentCourseDashboard.enrollment.completedLessonIds
+                                );
+                                isCompleted = Array.isArray(parsed) && parsed.includes(l.id);
+                              }
+                            } catch {
+                              // ignore
+                            }
+
+                            return (
+                              <div
+                                key={l.id}
+                                className="flex items-center justify-between p-3 rounded-lg academy-surface border border-slate-800/80 gap-3 text-xs"
+                              >
+                                <div className="min-w-0 flex-1 space-y-0.5">
+                                  <div className="font-semibold text-slate-200 truncate">
+                                    Lecture #{l.positionOrder}: {l.title}
+                                  </div>
+                                  <div className="text-[11px] academy-text-muted font-mono-tabular">
+                                    Duration: {l.duration || '45m'}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {isCompleted ? (
+                                    <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                      <CheckCircle2 className="w-3 h-3" />
+                                      <span>Done</span>
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-400">
+                                      Incomplete
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+
+                    {/* Right Column: Homework Submissions & Direct Grading */}
+                    <div className="rounded-xl academy-elevated p-5 space-y-4">
+                      <div className="flex items-center justify-between pb-2 border-b academy-divider">
+                        <h4 className="font-display text-sm font-bold text-teal-300 flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-teal-400" />
+                          <span>Student Homework Submissions</span>
+                        </h4>
+                        <span className="text-xs font-mono-tabular academy-text-muted">
+                          {
+                            homework.filter(
+                              (h) =>
+                                h.studentId === selectedStudentCourseDashboard.student.id &&
+                                h.courseId === selectedStudentCourseDashboard.course.id
+                            ).length
+                          }{' '}
+                          Submitted
+                        </span>
+                      </div>
+
+                      <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                        {homework.filter(
+                          (h) =>
+                            h.studentId === selectedStudentCourseDashboard.student.id &&
+                            h.courseId === selectedStudentCourseDashboard.course.id
+                        ).length === 0 ? (
+                          <div className="py-8 text-center text-xs academy-text-secondary">
+                            No homework submitted by this student for this course yet.
+                          </div>
+                        ) : (
+                          homework
+                            .filter(
+                              (h) =>
+                                h.studentId === selectedStudentCourseDashboard.student.id &&
+                                h.courseId === selectedStudentCourseDashboard.course.id
+                            )
+                            .map((hw) => {
+                              const currentInput = gradingInputs[hw.id] || {
+                                status: hw.status || 'graded',
+                                grade: hw.grade || 'A (95%)',
+                                feedback: hw.feedback || '',
+                              };
+
+                              return (
+                                <div
+                                  key={hw.id}
+                                  className="p-4 rounded-xl academy-surface border border-teal-500/20 space-y-2.5 text-xs"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <h5 className="font-bold text-white text-sm">{hw.title}</h5>
+                                    <span className="font-mono-tabular uppercase px-2 py-0.5 rounded text-[10px] font-bold bg-teal-400/20 text-teal-300">
+                                      {hw.status} {hw.grade ? `(${hw.grade})` : ''}
+                                    </span>
+                                  </div>
+                                  <p className="academy-text-secondary whitespace-pre-line leading-relaxed">
+                                    {hw.content}
+                                  </p>
+                                  {hw.attachmentUrl && (
+                                    <a
+                                      href={hw.attachmentUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 text-teal-400 hover:underline"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                      <span>Download Student Attachment</span>
+                                    </a>
+                                  )}
+
+                                  {/* Direct Grade Form */}
+                                  <div className="pt-2 border-t academy-divider space-y-2">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div>
+                                        <label className="block text-[10px] academy-text-secondary mb-1">
+                                          Status
+                                        </label>
+                                        <select
+                                          value={currentInput.status}
+                                          onChange={(e) =>
+                                            setGradingInputs((prev) => ({
+                                              ...prev,
+                                              [hw.id]: { ...currentInput, status: e.target.value },
+                                            }))
+                                          }
+                                          className="w-full px-2 py-1 text-xs rounded academy-surface"
+                                        >
+                                          <option value="graded">Graded / Approved</option>
+                                          <option value="exemplary">Exemplary / A+</option>
+                                          <option value="needs_revision">Revision Requested</option>
+                                          <option value="under_review">Under Review</option>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label className="block text-[10px] academy-text-secondary mb-1">
+                                          Grade Score
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={currentInput.grade}
+                                          onChange={(e) =>
+                                            setGradingInputs((prev) => ({
+                                              ...prev,
+                                              [hw.id]: { ...currentInput, grade: e.target.value },
+                                            }))
+                                          }
+                                          placeholder="A (95%)"
+                                          className="w-full px-2 py-1 text-xs rounded academy-surface font-mono-tabular"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className="block text-[10px] academy-text-secondary mb-1">
+                                        Feedback Comments
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={currentInput.feedback}
+                                        onChange={(e) =>
+                                          setGradingInputs((prev) => ({
+                                            ...prev,
+                                            [hw.id]: { ...currentInput, feedback: e.target.value },
+                                          }))
+                                        }
+                                        placeholder="MashaAllah, great progress..."
+                                        className="w-full px-2 py-1 text-xs rounded academy-surface"
+                                      />
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const res = await authFetch(
+                                          `/api/admin/homework/${hw.id}/grade`,
+                                          {
+                                            method: 'PUT',
+                                            body: JSON.stringify(currentInput),
+                                          }
+                                        );
+                                        if (res.ok) {
+                                          await onRefreshData();
+                                          showNotice(`Grade saved for ${selectedStudentCourseDashboard.student.fullName}!`);
+                                        }
+                                      }}
+                                      className="w-full py-1.5 px-3 rounded text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300"
+                                    >
+                                      Save Grade &amp; Send Feedback
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Student's Daily Session Surveys for this Course */}
+                  <div className="rounded-xl academy-elevated p-5 space-y-3">
+                    <h4 className="font-display text-sm font-bold text-teal-300 flex items-center gap-2">
+                      <ThumbsUp className="w-4 h-4 text-teal-400" />
+                      <span>Daily Class Feedback from this Student for {selectedStudentCourseDashboard.course.title}</span>
+                    </h4>
+                    {classSurveys.filter(
+                      (s) =>
+                        s.studentId === selectedStudentCourseDashboard.student.id &&
+                        s.courseId === selectedStudentCourseDashboard.course.id
+                    ).length === 0 ? (
+                      <p className="text-xs academy-text-secondary py-4 text-center">
+                        No session feedback submitted by this student yet.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {classSurveys
+                          .filter(
+                            (s) =>
+                              s.studentId === selectedStudentCourseDashboard.student.id &&
+                              s.courseId === selectedStudentCourseDashboard.course.id
+                          )
+                          .map((s) => (
+                            <div
+                              key={s.id}
+                              className="p-3 rounded-lg academy-surface border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                            >
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                      s.rating === 'satisfactory'
+                                        ? 'bg-emerald-500/20 text-emerald-300'
+                                        : 'bg-rose-500/20 text-rose-300'
+                                    }`}
+                                  >
+                                    {s.rating}
+                                  </span>
+                                  <span className="text-slate-300">
+                                    {s.comment || 'Satisfactory session overall.'}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-mono-tabular academy-text-muted">
+                                {new Date(s.createdAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Direct Instructor Message to Student */}
+                  <div className="rounded-xl academy-elevated p-5 space-y-3">
+                    <h4 className="font-display text-sm font-bold text-teal-300 flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-teal-400" />
+                      <span>Send Direct Academic Message to {selectedStudentCourseDashboard.student.fullName}</span>
+                    </h4>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={directStudentMessage}
+                        onChange={(e) => setDirectStudentMessage(e.target.value)}
+                        placeholder="Write a private note, lesson follow-up, or encouragement..."
+                        className="flex-1 px-3 py-2 text-xs rounded-xl academy-surface"
+                      />
+                      <button
+                        type="button"
+                        disabled={sendingDirectMessage || !directStudentMessage.trim()}
+                        onClick={async () => {
+                          setSendingDirectMessage(true);
+                          try {
+                            const res = await authFetch('/api/messages', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                receiverId: selectedStudentCourseDashboard.student.id,
+                                subject: `Message from Ustadh regarding ${selectedStudentCourseDashboard.course.title}`,
+                                body: directStudentMessage.trim(),
+                              }),
+                            });
+                            if (res.ok) {
+                              setDirectStudentMessage('');
+                              showNotice(`Direct message sent to ${selectedStudentCourseDashboard.student.fullName}!`);
+                              await onRefreshData();
+                            }
+                          } finally {
+                            setSendingDirectMessage(false);
+                          }
+                        }}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Send</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Student Roster List across Instructor's Assigned Courses */
+                <div className="rounded-xl academy-surface p-6 space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b academy-divider">
+                    <div>
+                      <h2 className="font-display text-lg font-bold text-teal-400">
+                        Enrolled Students &amp; Individual Course Dashboards
+                      </h2>
+                      <p className="text-xs academy-text-secondary mt-0.5">
+                        Click on any enrolled student to enter their personal course dashboard (showing{' '}
+                        <strong>only the course you teach</strong>).
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      {/* Course Filter */}
+                      <select
+                        value={teacherCourseFilter}
+                        onChange={(e) =>
+                          setTeacherCourseFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                        }
+                        className="px-3 py-1.5 text-xs rounded-xl academy-elevated font-medium"
+                      >
+                        <option value="all">All My Courses ({managedCourses.length})</option>
+                        {managedCourses.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.title}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Search */}
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={teacherStudentSearch}
+                          onChange={(e) => setTeacherStudentSearch(e.target.value)}
+                          placeholder="Search student by name or email..."
+                          className="pl-8 pr-3 py-1.5 text-xs rounded-xl academy-elevated w-52 focus:w-64 transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Enrolled Students Table / Cards */}
+                  {(() => {
+                    const filteredEnrollments = enrollments.filter((e) => {
+                      if (!managedCourseIds.includes(e.courseId)) return false;
+                      if (teacherCourseFilter !== 'all' && e.courseId !== teacherCourseFilter) return false;
+                      const studentObj = profiles.find((p) => p.id === e.studentId);
+                      if (teacherStudentSearch.trim()) {
+                        const q = teacherStudentSearch.toLowerCase();
+                        const matchName = (studentObj?.fullName || '').toLowerCase().includes(q);
+                        const matchEmail = (studentObj?.email || '').toLowerCase().includes(q);
+                        if (!matchName && !matchEmail) return false;
+                      }
+                      return true;
+                    });
+
+                    if (filteredEnrollments.length === 0) {
+                      return (
+                        <div className="py-12 text-center text-xs academy-text-secondary">
+                          No students found matching your course filter or search query.
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {filteredEnrollments.map((enr) => {
+                          const student: Profile = profiles.find((p) => p.id === enr.studentId) || {
+                            id: enr.studentId,
+                            uid: `student-${enr.studentId}`,
+                            fullName: `Student #${enr.studentId}`,
+                            email: 'student@deenhijrah.edu',
+                            role: 'student' as const,
+                            avatarUrl: null,
+                            createdAt: enr.enrolledAt,
+                          };
+                          const courseObj = courses.find((c) => c.id === enr.courseId);
+                          if (!courseObj) return null;
+
+                          const courseLessons = lessons.filter((l) => l.courseId === courseObj.id);
+                          const studentHw = homework.filter(
+                            (h) => h.studentId === student.id && h.courseId === courseObj.id
+                          );
+
+                          return (
+                            <div
+                              key={`${enr.studentId}-${enr.courseId}`}
+                              className="p-5 rounded-xl academy-elevated border border-teal-500/25 hover:border-teal-400/60 transition-all space-y-4 flex flex-col justify-between"
+                            >
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-400/40 flex items-center justify-center text-teal-300 font-bold uppercase shrink-0">
+                                    {student.fullName.charAt(0) || 'S'}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-bold text-white text-sm truncate">
+                                      {student.fullName}
+                                    </div>
+                                    <div className="text-[11px] academy-text-muted truncate">
+                                      {student.email}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="p-2.5 rounded-lg academy-surface space-y-1.5 text-xs">
+                                  <div className="text-[11px] font-semibold text-teal-300 truncate">
+                                    {courseObj.title}
+                                  </div>
+                                  <div className="flex items-center justify-between text-[11px] font-mono-tabular academy-text-secondary">
+                                    <span>Course Progress</span>
+                                    <span className="font-bold text-white">
+                                      {enr.progressPercentage}%
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                                    <div
+                                      className="h-full bg-teal-400"
+                                      style={{ width: `${enr.progressPercentage}%` }}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center justify-between text-[11px] font-mono-tabular text-slate-400">
+                                  <span>{courseLessons.length} Lectures</span>
+                                  <span>{studentHw.length} HW Submissions</span>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSelectedStudentCourseDashboard({
+                                    student,
+                                    course: courseObj,
+                                    enrollment: enr,
+                                  })
+                                }
+                                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors cursor-pointer shadow-sm"
+                              >
+                                <span>Inspect Student Course Dashboard</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* MODULE: ANNOUNCEMENTS MANAGER */}
+          {activeModule === 'announcements' && (
+            <div className="space-y-6">
+              {/* Post Announcement Form */}
+              <div className="rounded-xl academy-surface p-6 space-y-4">
+                <div className="pb-3 border-b academy-divider">
+                  <h2 className="font-display text-lg font-bold text-teal-400 flex items-center gap-2">
+                    <Megaphone className="w-5 h-5 text-teal-400" />
+                    <span>Publish Course Announcement</span>
+                  </h2>
+                  <p className="text-xs academy-text-secondary mt-0.5">
+                    Announcements are immediately visible in the Student Portal for all enrolled students.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs academy-text-secondary mb-1">
+                        Announcement Title *
+                      </label>
+                      <input
+                        type="text"
+                        value={newAnnTitle}
+                        onChange={(e) => setNewAnnTitle(e.target.value)}
+                        placeholder="e.g. Mid-term review session scheduled on Wednesday"
+                        className="w-full px-3 py-2 text-xs rounded-xl academy-elevated"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs academy-text-secondary mb-1">
+                        Target Course
+                      </label>
+                      <select
+                        value={newAnnCourseId}
+                        onChange={(e) =>
+                          setNewAnnCourseId(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                        }
+                        className="w-full px-3 py-2 text-xs rounded-xl academy-elevated"
+                      >
+                        <option value="all">General / Academy-Wide (All Courses)</option>
+                        {managedCourses.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs academy-text-secondary mb-1">
+                      Announcement Content &amp; Details *
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={newAnnContent}
+                      onChange={(e) => setNewAnnContent(e.target.value)}
+                      placeholder="Enter detailed notice, links, Zoom reminders, or homework guidelines..."
+                      className="w-full px-3 py-2 text-xs rounded-xl academy-elevated"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="academy-text-secondary">Priority:</span>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="priority"
+                          checked={newAnnPriority === 'normal'}
+                          onChange={() => setNewAnnPriority('normal')}
+                          className="accent-teal-400"
+                        />
+                        <span className="text-slate-300">Normal</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="priority"
+                          checked={newAnnPriority === 'important'}
+                          onChange={() => setNewAnnPriority('important')}
+                          className="accent-rose-400"
+                        />
+                        <span className="text-rose-300 font-semibold">Important / Urgent</span>
+                      </label>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isPostingAnn || !newAnnTitle.trim() || !newAnnContent.trim()}
+                      onClick={async () => {
+                        setIsPostingAnn(true);
+                        try {
+                          const res = await authFetch('/api/announcements', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              title: newAnnTitle.trim(),
+                              content: newAnnContent.trim(),
+                              courseId: newAnnCourseId === 'all' ? null : newAnnCourseId,
+                              priority: newAnnPriority,
+                              instructorName: profile?.fullName || 'Ustadh Mustaqeem Shaikh',
+                            }),
+                          });
+                          if (res.ok) {
+                            setNewAnnTitle('');
+                            setNewAnnContent('');
+                            showNotice('Announcement published successfully to Student Portal!');
+                            await onRefreshData();
+                          }
+                        } finally {
+                          setIsPostingAnn(false);
+                        }
+                      }}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>{isPostingAnn ? 'Publishing...' : 'Publish Announcement'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Announcements Feed */}
+              <div className="rounded-xl academy-surface p-6 space-y-4">
+                <h3 className="font-display text-base font-bold text-white">
+                  Active Announcements ({announcements.length})
+                </h3>
+
+                {announcements.length === 0 ? (
+                  <div className="py-8 text-center text-xs academy-text-secondary">
+                    No announcements published yet.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {announcements.map((ann) => {
+                      const courseObj = courses.find((c) => c.id === ann.courseId);
+                      return (
+                        <div
+                          key={ann.id}
+                          className="p-4 rounded-xl academy-elevated border border-teal-500/25 space-y-2 text-xs"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase font-mono-tabular ${
+                                  ann.priority === 'important'
+                                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                    : 'bg-teal-400/20 text-teal-300'
+                                }`}
+                              >
+                                {ann.priority}
+                              </span>
+                              <span className="font-semibold text-teal-300">
+                                {courseObj ? courseObj.title : 'Academy-Wide'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <span className="academy-text-muted font-mono-tabular text-[11px]">
+                                By {ann.instructorName} · {new Date(ann.createdAt).toLocaleDateString()}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const res = await authFetch(`/api/announcements/${ann.id}`, {
+                                    method: 'DELETE',
+                                  });
+                                  if (res.ok) {
+                                    showNotice('Announcement deleted.');
+                                    await onRefreshData();
+                                  }
+                                }}
+                                className="text-rose-400 hover:text-rose-300 p-1"
+                                title="Delete announcement"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <h4 className="font-bold text-white text-sm">{ann.title}</h4>
+                          <p className="academy-text-secondary leading-relaxed whitespace-pre-line">
+                            {ann.content}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* MODULE: ADMIN & FACULTY ACCESS APPLICATIONS */}
+          {activeModule === 'applications' && (
+            <div className="rounded-xl academy-surface p-6 space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b academy-divider">
+                <div>
+                  <h2 className="font-display text-lg font-bold text-teal-400 flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-teal-400" />
+                    <span>Admin &amp; Teacher Access Applications</span>
+                  </h2>
+                  <p className="text-xs academy-text-secondary mt-0.5">
+                    Review and approve submitted requests for Administrator or Faculty permissions.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5 p-1 rounded-xl academy-elevated text-xs">
+                  {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setAppStatusFilter(status)}
+                      className={`px-3 py-1.5 rounded-lg capitalize font-medium transition-colors ${
+                        appStatusFilter === status
+                          ? 'bg-teal-400 text-slate-950 font-bold'
+                          : 'academy-text-secondary hover:text-teal-300'
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Applications List */}
+              {(() => {
+                const filtered = roleApplications.filter(
+                  (a) => appStatusFilter === 'all' || a.status === appStatusFilter
+                );
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="py-12 text-center text-xs academy-text-secondary">
+                      No applications found with status: {appStatusFilter}.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-4">
+                    {filtered.map((app) => (
+                      <div
+                        key={app.id}
+                        className="p-5 rounded-xl academy-elevated border border-teal-500/25 space-y-3 text-xs"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-bold text-white text-sm">{app.applicantName}</span>
+                            <span className="text-teal-400 font-mono-tabular">({app.applicantEmail})</span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                app.requestedRole === 'admin'
+                                  ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30'
+                                  : 'bg-teal-400/20 text-teal-300 border border-teal-400/30'
+                              }`}
+                            >
+                              Requesting: {app.requestedRole}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase font-mono-tabular ${
+                                app.status === 'approved'
+                                  ? 'bg-emerald-500/20 text-emerald-300'
+                                  : app.status === 'rejected'
+                                  ? 'bg-rose-500/20 text-rose-300'
+                                  : 'bg-amber-400/20 text-amber-300 animate-pulse'
+                              }`}
+                            >
+                              {app.status}
+                            </span>
+                            <span className="text-[11px] font-mono-tabular academy-text-muted">
+                              {new Date(app.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="text-[11px] font-semibold text-teal-400 uppercase">
+                            Reason for Request
+                          </div>
+                          <p className="academy-text-secondary whitespace-pre-line leading-relaxed">
+                            {app.reason}
+                          </p>
+                        </div>
+
+                        {app.credentialsBio && (
+                          <div className="space-y-1 pt-1">
+                            <div className="text-[11px] font-semibold text-teal-400 uppercase">
+                              Credentials &amp; Background
+                            </div>
+                            <p className="academy-text-secondary whitespace-pre-line leading-relaxed">
+                              {app.credentialsBio}
+                            </p>
+                          </div>
+                        )}
+
+                        {app.status === 'pending' && (
+                          <div className="flex items-center gap-2 pt-2 border-t academy-divider">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const res = await authFetch(`/api/role-applications/${app.id}`, {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    status: 'approved',
+                                    applicantId: app.applicantId,
+                                    requestedRole: app.requestedRole,
+                                  }),
+                                });
+                                if (res.ok) {
+                                  showNotice(`Approved ${app.applicantName} as ${app.requestedRole}!`);
+                                  await onRefreshData();
+                                }
+                              }}
+                              className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition-colors shadow-sm cursor-pointer"
+                            >
+                              Approve &amp; Upgrade Role to {app.requestedRole}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const res = await authFetch(`/api/role-applications/${app.id}`, {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ status: 'rejected' }),
+                                });
+                                if (res.ok) {
+                                  showNotice(`Rejected application #${app.id}`);
+                                  await onRefreshData();
+                                }
+                              }}
+                              className="px-3.5 py-2 rounded-xl text-xs font-medium academy-elevated hover:bg-rose-500/20 text-rose-300 transition-colors cursor-pointer"
+                            >
+                              Reject Application
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* MODULE: DAILY SESSION SURVEYS & TEACHER FEEDBACK */}
+          {activeModule === 'surveys' && (
+            <div className="rounded-xl academy-surface p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b academy-divider">
+                <div>
+                  <h2 className="font-display text-lg font-bold text-teal-400 flex items-center gap-2">
+                    <ThumbsUp className="w-5 h-5 text-teal-400" />
+                    <span>Daily Class Session Feedback &amp; Surveys</span>
+                  </h2>
+                  <p className="text-xs academy-text-secondary mt-0.5">
+                    Student ratings on whether each class day session was satisfactory or unsatisfactory.
+                  </p>
+                </div>
+
+                <select
+                  value={surveyCourseFilter}
+                  onChange={(e) =>
+                    setSurveyCourseFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                  }
+                  className="px-3 py-1.5 text-xs rounded-xl academy-elevated font-medium"
+                >
+                  <option value="all">All Courses ({courses.length})</option>
+                  {(isInstructor ? managedCourses : courses).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Statistics Metric Cards */}
+              {(() => {
+                const filtered = classSurveys.filter(
+                  (s) => surveyCourseFilter === 'all' || s.courseId === surveyCourseFilter
+                );
+                const total = filtered.length;
+                const satisfactoryCount = filtered.filter((s) => s.rating === 'satisfactory').length;
+                const unsatisfactoryCount = filtered.filter((s) => s.rating === 'unsatisfactory').length;
+                const satPercent = total > 0 ? Math.round((satisfactoryCount / total) * 100) : 100;
+
+                return (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="p-4 rounded-xl academy-elevated border border-teal-500/20 space-y-1">
+                        <div className="text-[11px] academy-text-muted">Total Responses</div>
+                        <div className="text-2xl font-bold font-mono-tabular text-white">{total}</div>
+                      </div>
+                      <div className="p-4 rounded-xl academy-elevated border border-emerald-500/30 space-y-1">
+                        <div className="text-[11px] text-emerald-400 font-semibold">
+                          Satisfactory ({satPercent}%)
+                        </div>
+                        <div className="text-2xl font-bold font-mono-tabular text-emerald-300">
+                          {satisfactoryCount}
+                        </div>
+                      </div>
+                      <div className="p-4 rounded-xl academy-elevated border border-rose-500/30 space-y-1">
+                        <div className="text-[11px] text-rose-400 font-semibold">Unsatisfactory</div>
+                        <div className="text-2xl font-bold font-mono-tabular text-rose-300">
+                          {unsatisfactoryCount}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Table / Card List */}
+                    <div className="space-y-3">
+                      {filtered.length === 0 ? (
+                        <div className="py-10 text-center text-xs academy-text-secondary">
+                          No student surveys submitted yet for this course selection.
+                        </div>
+                      ) : (
+                        filtered.map((s) => {
+                          const courseObj = courses.find((c) => c.id === s.courseId);
+                          const lessonObj = lessons.find((l) => l.id === s.lessonId);
+                          return (
+                            <div
+                              key={s.id}
+                              className="p-4 rounded-xl academy-elevated border border-teal-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                            >
+                              <div className="space-y-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase font-mono-tabular ${
+                                      s.rating === 'satisfactory'
+                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                    }`}
+                                  >
+                                    {s.rating}
+                                  </span>
+                                  <span className="font-semibold text-white">{s.studentName}</span>
+                                  <span className="academy-text-muted">· {courseObj?.title || 'Course'}</span>
+                                  {lessonObj && (
+                                    <span className="academy-text-muted font-mono-tabular">
+                                      (Lecture #{lessonObj.positionOrder})
+                                    </span>
+                                  )}
+                                </div>
+                                {s.comment && (
+                                  <p className="text-slate-300 italic pt-0.5">
+                                    &ldquo;{s.comment}&rdquo;
+                                  </p>
+                                )}
+                              </div>
+
+                              <span className="text-[11px] font-mono-tabular academy-text-muted shrink-0">
+                                {new Date(s.createdAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

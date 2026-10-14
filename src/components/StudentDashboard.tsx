@@ -21,10 +21,15 @@ import {
   Film,
   Crown,
   Key,
+  Megaphone,
+  ShieldCheck,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 import { getZoomEventDetails } from '../lib/zoomService.ts';
 import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
 import { ClassRecordingsVault } from './ClassRecordingsVault.tsx';
+import { ClassSessionSurveyWidget } from './ClassSessionSurveyWidget.tsx';
 import {
   Course,
   Enrollment,
@@ -34,12 +39,12 @@ import {
   Profile,
   HomeworkSubmission,
   HomeworkGradeStatus,
+  Announcement,
   parseCourseTags,
 } from '../types.ts';
 import { resolveThumbnailUrl, ACADEMY_ASSETS } from '../lib/assets.ts';
 import { InteractiveCalendar } from './InteractiveCalendar.tsx';
 import { PathOfKnowledgeRoadmap } from './PathOfKnowledgeRoadmap.tsx';
-import { CourseCompletionChart } from './CourseCompletionChart.tsx';
 import { AttendanceStreakCard } from './AttendanceStreakCard.tsx';
 import { GRADE_STATUS_META } from './CourseWatchView.tsx';
 import {
@@ -47,6 +52,10 @@ import {
   getDetectedUserTimezone,
   WORLD_TIMEZONES,
 } from '../lib/timezone.ts';
+import { smartApiFetch } from '../lib/fallbackStore.ts';
+import { CourseAttendanceSection } from './CourseAttendanceSection.tsx';
+import { StudentArticlesHub } from './StudentArticlesHub.tsx';
+import { CourseDetailsModal } from './CourseDetailsModal.tsx';
 
 interface StudentDashboardProps {
   profile: Profile | null;
@@ -57,6 +66,7 @@ interface StudentDashboardProps {
   messages: Message[];
   homework: HomeworkSubmission[];
   allProfiles: Profile[];
+  announcements?: Announcement[];
   onWatchCourse: (course: Course) => void;
   onEnrollCourse: (courseId: number) => Promise<void>;
   onToggleLessonProgress?: (courseId: number, lessonId: number) => Promise<void>;
@@ -83,6 +93,13 @@ interface StudentDashboardProps {
   ) => Promise<void>;
   onUploadFile: (file: File) => Promise<string>;
   onBrowseCourses: () => void;
+  onOpenRoleApplication?: () => void;
+  onSubmitSurvey?: (
+    rating: 'satisfactory' | 'unsatisfactory',
+    comment: string,
+    courseId: number,
+    lessonId?: number
+  ) => Promise<void>;
 }
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({
@@ -94,6 +111,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   messages,
   homework,
   allProfiles,
+  announcements = [],
   onWatchCourse,
   onEnrollCourse,
   onToggleLessonProgress,
@@ -104,10 +122,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   onSubmitFeedback,
   onUploadFile,
   onBrowseCourses,
+  onOpenRoleApplication,
+  onSubmitSurvey,
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'recordings' | 'roadmap' | 'homework' | 'feedback' | 'zoom' | 'calendar' | 'inbox'
+    'overview' | 'courses' | 'articles' | 'recordings' | 'roadmap' | 'homework' | 'feedback' | 'zoom' | 'calendar' | 'inbox'
   >('overview');
+  const [detailedCourseModal, setDetailedCourseModal] = useState<Course | null>(null);
   const [calendarCourseFilter, setCalendarCourseFilter] = useState<number | null>(null);
 
   const detectedTz = useMemo(() => getDetectedUserTimezone(), []);
@@ -405,38 +426,66 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </p>
           </div>
 
-          {/* Timezone sync box - prominent, clean, and easily accessible */}
-          <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl academy-elevated border border-teal-500/25 text-xs text-teal-300 shrink-0 self-start lg:self-auto shadow-sm">
-            <Globe className="w-4 h-4 text-teal-400 shrink-0" />
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-              <span className="text-[11px] text-slate-400 font-medium">Your Local Timezone:</span>
-              <select
-                value={selectedTimezone}
-                onChange={(e) => setSelectedTimezone(e.target.value)}
-                title="Sync all course class times, Zoom meetings, and course calendars to your country timezone"
-                className="px-2.5 py-1 rounded-md bg-slate-900 border border-teal-500/30 text-xs font-semibold text-teal-300 focus:outline-none focus:border-teal-400 cursor-pointer"
+          {/* Actions & Timezone bar */}
+          <div className="flex flex-wrap items-center gap-3 self-start lg:self-auto">
+            {onOpenRoleApplication && profile?.role !== 'admin' && (
+              <button
+                type="button"
+                onClick={onOpenRoleApplication}
+                className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl academy-elevated border border-teal-500/30 text-xs font-semibold text-teal-300 hover:bg-teal-500/10 transition-all cursor-pointer shadow-sm"
+                title="Submit request for elevated faculty or administrator privileges"
               >
-                <option value={detectedTz} className="bg-slate-900 text-white">
-                  Auto-Detected ({detectedTz})
-                </option>
-                {WORLD_TIMEZONES.filter((w) => w.tz !== detectedTz).map((w) => (
-                  <option key={w.tz} value={w.tz} className="bg-slate-900 text-white">
-                    {w.label}
+                <ShieldCheck className="w-4 h-4 text-teal-400" />
+                <span>Apply for Admin / Teacher Access</span>
+              </button>
+            )}
+
+            {/* Timezone sync box */}
+            <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl academy-elevated border border-teal-500/25 text-xs text-teal-300 shrink-0 shadow-sm">
+              <Globe className="w-4 h-4 text-teal-400 shrink-0" />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                <span className="text-[11px] text-slate-400 font-medium">Your Local Timezone:</span>
+                <select
+                  value={selectedTimezone}
+                  onChange={(e) => setSelectedTimezone(e.target.value)}
+                  title="Sync all course class times, Zoom meetings, and course calendars to your country timezone"
+                  className="px-2.5 py-1 rounded-md bg-slate-900 border border-teal-500/30 text-xs font-semibold text-teal-300 focus:outline-none focus:border-teal-400 cursor-pointer"
+                >
+                  <option value={detectedTz} className="bg-slate-900 text-white">
+                    Auto-Detected ({detectedTz})
                   </option>
-                ))}
-              </select>
+                  {WORLD_TIMEZONES.filter((w) => w.tz !== detectedTz).map((w) => (
+                    <option key={w.tz} value={w.tz} className="bg-slate-900 text-white">
+                      {w.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Dedicated Full-Width Navigation Bar (Spans entire width, no more cramming to the far right!) */}
+        {/* Dedicated Student Navigation Bar */}
         <div className="w-full bg-slate-950/80 academy-elevated p-1.5 rounded-2xl border border-slate-800/80 shadow-md">
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 w-full">
             <button
               type="button"
               onClick={() => setActiveTab('overview')}
-              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === 'overview'
+                  ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 shrink-0" />
+              <span className="truncate">Dashboard</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('courses')}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all cursor-pointer ${
+                activeTab === 'courses'
                   ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
                   : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
               }`}
@@ -447,8 +496,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
             <button
               type="button"
+              onClick={() => setActiveTab('articles')}
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all cursor-pointer ${
+                activeTab === 'articles'
+                  ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
+                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
+              }`}
+            >
+              <FileText className="w-4 h-4 shrink-0 text-amber-300" />
+              <span className="truncate">Blogs / Papers</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('recordings')}
-              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === 'recordings'
                   ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
                   : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
@@ -460,47 +522,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('roadmap')}
-              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
-                activeTab === 'roadmap'
-                  ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
-                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
-              }`}
-            >
-              <Compass className="w-4 h-4 shrink-0" />
-              <span className="truncate">Path of Knowledge</span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => setActiveTab('homework')}
-              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === 'homework'
                   ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
                   : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
               }`}
             >
-              <FileText className="w-4 h-4 shrink-0" />
+              <Upload className="w-4 h-4 shrink-0" />
               <span className="truncate">Homework ({homework.length})</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setActiveTab('feedback')}
-              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
-                activeTab === 'feedback'
-                  ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
-                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
-              }`}
-            >
-              <MessageSquarePlus className="w-4 h-4 shrink-0" />
-              <span className="truncate">Feedback</span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => setActiveTab('zoom')}
-              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === 'zoom'
                   ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
                   : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
@@ -516,20 +552,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 setCalendarCourseFilter(null);
                 setActiveTab('calendar');
               }}
-              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === 'calendar'
                   ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
                   : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
               }`}
             >
               <Calendar className="w-4 h-4 shrink-0" />
-              <span className="truncate">Calendars</span>
+              <span className="truncate">Calendar</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab('inbox')}
-              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all ${
+              className={`flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl transition-all cursor-pointer ${
                 activeTab === 'inbox'
                   ? 'bg-teal-400 text-slate-950 font-bold shadow-md shadow-teal-500/20 ring-1 ring-teal-300'
                   : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent hover:border-slate-800'
@@ -544,74 +580,26 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
       </div>
 
-      {/* ATTENDANCE STREAK COUNTER & DAILY ISTIQAMAH CARD */}
-      <AttendanceStreakCard
-        studentId={profile?.id || profile?.uid || 'guest-seeker'}
+      {/* FIRST ON DASHBOARD: AUTOMATED COURSE ATTENDANCE SYSTEM (No self-marking, 10 min window rule) */}
+      <CourseAttendanceSection
+        studentId={profile?.id || profile?.uid || 'guest-scholar'}
         studentName={profile?.fullName || 'Scholar'}
+        courses={enrolledCourses.length > 0 ? enrolledCourses : courses.slice(0, 2)}
+        events={events}
         selectedTimezone={selectedTimezone}
-        onContinueCoursework={() => {
-          if (enrolledCourses.length > 0) {
-            onWatchCourse(enrolledCourses[0]);
+        onJoinZoomMeeting={(ev, c) => {
+          if (ev?.zoomJoinUrl) {
+            window.open(ev.zoomJoinUrl, '_blank');
           } else {
-            onBrowseCourses();
+            onWatchCourse(c);
           }
         }}
+        onBrowseCourses={onBrowseCourses}
       />
 
-      {/* OVERALL COURSE PROGRESS SUMMARY BAR */}
-      <div className="rounded-xl academy-surface p-5 border border-teal-500/30 space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="text-xs font-semibold text-teal-400">
-              Academic Course Progress &amp; Completion Tracker
-            </div>
-            <p className="text-xs academy-text-secondary mt-0.5">
-              Track your completed lecture recordings, overall course progress percentage, and
-              graded homework status across all enrolled courses.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-4 text-xs font-mono-tabular shrink-0">
-            <span>
-              Overall Progress:{' '}
-              <strong className="text-emerald-400">{overallProgressStats.avgPercentage}%</strong>
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>
-              Lessons Completed:{' '}
-              <strong className="text-teal-300">
-                {overallProgressStats.totalCompleted}/{overallProgressStats.totalLessons}
-              </strong>
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>
-              Homework Graded:{' '}
-              <strong className="text-teal-300">
-                {overallProgressStats.gradedHwCount}/{homework.length}
-              </strong>
-            </span>
-          </div>
-        </div>
-        <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-teal-400 to-emerald-400 transition-all duration-500"
-            style={{ width: `${overallProgressStats.avgPercentage}%` }}
-          />
-        </div>
-      </div>
-
-      {/* VISUAL 'PATH OF KNOWLEDGE' PROGRESS ROADMAP + RECHARTS COMPLETION BAR CHART */}
+      {/* VISUAL 'PATH OF KNOWLEDGE' PROGRESS ROADMAP */}
       {(activeTab === 'overview' || activeTab === 'roadmap') && (
         <div className="space-y-8">
-          <CourseCompletionChart
-            courses={courses}
-            enrolledCourses={enrolledCourses}
-            enrollments={myEnrollments}
-            lessons={lessons}
-            onWatchCourse={onWatchCourse}
-            onEnrollCourse={onEnrollCourse}
-            onToggleLessonProgress={onToggleLessonProgress}
-          />
-
           <PathOfKnowledgeRoadmap
             courses={courses}
             lessons={lessons}
@@ -637,9 +625,101 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
       )}
 
-      {/* TAB 1: OVERVIEW (Enrolled Courses + Course Progress + Upcoming Live Zoom Meetings Summary) */}
+      {/* TAB 1: OVERVIEW (Teacher Announcements + Enrolled Courses + Daily Class Survey + Live Meetings) */}
       {activeTab === 'overview' && (
-        <div className="space-y-10">
+        <div className="space-y-8">
+          {/* TEACHER & ACADEMY ANNOUNCEMENTS */}
+          {announcements.length > 0 && (
+            <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-teal-950/40 via-slate-900 to-slate-950 border border-teal-500/30 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between pb-3 border-b border-teal-500/20">
+                <div className="flex items-center gap-2.5">
+                  <Megaphone className="w-5 h-5 text-teal-400" />
+                  <h3 className="font-display text-base font-bold text-white">
+                    Teacher &amp; Academy Announcements ({announcements.length})
+                  </h3>
+                </div>
+                <span className="text-xs font-mono-tabular text-teal-300">
+                  Latest Updates
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {announcements.map((ann) => {
+                  const courseObj = courses.find((c) => c.id === ann.courseId);
+                  return (
+                    <div
+                      key={ann.id}
+                      className="p-4 rounded-xl academy-elevated border border-slate-800 space-y-2 hover:border-teal-500/30 transition-all"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/15 text-teal-300 border border-teal-500/30">
+                          {courseObj ? courseObj.title : 'Academy-Wide Notice'}
+                        </span>
+                        {ann.priority === 'important' && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                            Important
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="text-sm font-bold text-white">{ann.title}</h4>
+                      <p className="text-xs academy-text-secondary leading-relaxed">
+                        {ann.content}
+                      </p>
+                      <div className="pt-1 flex items-center justify-between text-[11px] academy-text-muted font-mono-tabular">
+                        <span>Instructor: {ann.instructorName}</span>
+                        <span>
+                          {new Date(ann.createdAt).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* DAILY QUICK CLASS & TEACHER FEEDBACK SURVEY */}
+          {enrolledCourses.length > 0 && (
+            <div className="p-5 sm:p-6 rounded-2xl academy-surface border border-teal-500/25 space-y-4 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b academy-divider">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-teal-300" />
+                  <h3 className="font-display text-sm sm:text-base font-bold text-white">
+                    Daily Class &amp; Teacher Feedback Survey
+                  </h3>
+                </div>
+                <p className="text-xs academy-text-secondary">
+                  Share whether today&apos;s session was satisfactory or unsatisfactory
+                </p>
+              </div>
+
+              <ClassSessionSurveyWidget
+                courseId={enrolledCourses[0].id}
+                courseTitle={enrolledCourses[0].title}
+                instructorName={enrolledCourses[0].instructorName}
+                currentProfile={profile}
+                onSubmitSurvey={async (rating, comment) => {
+                  if (onSubmitSurvey) {
+                    await onSubmitSurvey(rating, comment, enrolledCourses[0].id);
+                  } else {
+                    await smartApiFetch('/api/class-surveys', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        courseId: enrolledCourses[0].id,
+                        rating,
+                        comment,
+                        instructorId: enrolledCourses[0].instructorId || null,
+                      }),
+                    });
+                  }
+                }}
+              />
+            </div>
+          )}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-xl font-bold">
@@ -860,29 +940,23 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           </a>
                         )}
 
-                        <div className="flex items-center gap-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setDetailedCourseModal(course)}
+                            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-semibold academy-elevated hover:border-teal-400 text-teal-300 transition-colors whitespace-nowrap cursor-pointer"
+                          >
+                            <BookOpen className="w-3.5 h-3.5 text-teal-400" />
+                            <span>View Details</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => onWatchCourse(course)}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
-                              nextLiveSession?.zoomJoinUrl
-                                ? 'academy-elevated hover:border-teal-400 text-teal-300'
-                                : 'bg-teal-400 text-slate-950 hover:bg-teal-300'
-                            }`}
+                            className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 hover:bg-emerald-500/30 transition-colors whitespace-nowrap cursor-pointer"
                           >
-                            <Play className="w-3.5 h-3.5" />
-                            <span>Watch Class Recordings</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCalendarCourseFilter(course.id);
-                              setActiveTab('calendar');
-                            }}
-                            title="Open Course-Specific Calendar (Synced with your country timezone)"
-                            className="p-2.5 rounded-lg academy-elevated hover:border-teal-400/50 text-teal-400"
-                          >
-                            <Calendar className="w-4 h-4" />
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                            <span>Recordings</span>
                           </button>
                         </div>
                       </div>
@@ -1029,19 +1103,160 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
       )}
 
-      {/* TAB: CLASS RECORDINGS VAULT (Playlist on the Side + Big Cinema Screen on the Right) */}
+      {/* TAB: MY COURSES (Dedicated Courses List with View Details Modal & Syllabus) */}
+      {activeTab === 'courses' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b academy-divider">
+            <div>
+              <h2 className="font-display text-xl sm:text-2xl font-bold text-white">
+                My Enrolled Sacred Knowledge Programs
+              </h2>
+              <p className="text-xs academy-text-secondary mt-1">
+                Inspect course details, official syllabi, and teacher-uploaded files.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onBrowseCourses}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors shadow-md self-start sm:self-auto cursor-pointer"
+            >
+              + Explore More Programs
+            </button>
+          </div>
+
+          {enrolledCourses.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {enrolledCourses.map((course) => {
+                const enrollment = myEnrollments.find((e) => e.courseId === course.id);
+                const courseLessonsList = lessons
+                  .filter((l) => l.courseId === course.id)
+                  .sort((a, b) => a.positionOrder - b.positionOrder || a.id - b.id);
+                const convertedSchedule = convertClassTimeToRegion(
+                  course.launchDate,
+                  course.classStartTime || '14:00',
+                  course.classTimezone || 'America/New_York',
+                  selectedTimezone
+                );
+
+                return (
+                  <div
+                    key={course.id}
+                    className="rounded-2xl overflow-hidden academy-surface border border-slate-800 hover:border-teal-400/50 transition-all flex flex-col justify-between group shadow-xl bg-[#061224]"
+                  >
+                    <div>
+                      <div className="relative h-48 overflow-hidden bg-slate-950">
+                        <img
+                          src={resolveThumbnailUrl(course.thumbnailUrl)}
+                          alt={course.title}
+                          loading="lazy"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = ACADEMY_ASSETS.courseSeerah;
+                          }}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#061224] via-transparent to-transparent" />
+                        <div className="absolute top-3 left-3">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-teal-400 text-slate-950 shadow-md">
+                            Enrolled Student
+                          </span>
+                        </div>
+                        <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-xs text-teal-300 font-mono-tabular">
+                          <span>{courseLessonsList.length} Recordings</span>
+                          <span className="font-bold text-emerald-400">
+                            {enrollment?.progressPercentage || 0}% Progress
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-5 space-y-3">
+                        <div className="text-xs text-teal-400 font-medium">
+                          {course.category} · Faculty: {course.instructorName}
+                        </div>
+                        <h3 className="font-display text-lg font-bold text-white line-clamp-1">
+                          {course.title}
+                        </h3>
+                        <p className="text-xs academy-text-secondary line-clamp-2 leading-relaxed">
+                          {course.description}
+                        </p>
+
+                        <div className="flex items-center gap-1.5 text-xs text-teal-300 font-mono-tabular bg-teal-950/30 px-2.5 py-1.5 rounded-lg border border-teal-500/20">
+                          <Globe className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                          <span className="truncate">
+                            {course.classDays || 'Sat & Wed'} · {convertedSchedule.formattedLocalTime} ({selectedTimezone})
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-5 pt-0 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDetailedCourseModal(course)}
+                          className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-semibold academy-elevated hover:border-teal-400 text-teal-300 transition-colors whitespace-nowrap cursor-pointer"
+                        >
+                          <BookOpen className="w-3.5 h-3.5 text-teal-400" />
+                          <span>View Details</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => onWatchCourse(course)}
+                          className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 hover:bg-emerald-500/30 transition-colors whitespace-nowrap cursor-pointer"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Recordings</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-10 rounded-2xl academy-surface text-center space-y-4">
+              <BookOpen className="w-10 h-10 text-teal-400 mx-auto" />
+              <div>
+                <h3 className="font-display text-lg font-bold text-white">
+                  No Enrolled Courses Yet
+                </h3>
+                <p className="text-xs academy-text-secondary max-w-md mx-auto mt-1">
+                  Enroll in a Sacred Knowledge program from the Academy Catalog to inspect the syllabus and download uploaded files.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onBrowseCourses}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors shadow-md"
+              >
+                Browse Course Catalog
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: BLOGS / RESEARCH PAPERS / ARTICLES HUB */}
+      {activeTab === 'articles' && (
+        <StudentArticlesHub
+          currentProfile={profile}
+          onUploadFile={onUploadFile}
+        />
+      )}
       {activeTab === 'recordings' && (
         <ClassRecordingsVault
           courses={courses}
           lessons={lessons}
           enrollments={myEnrollments}
           initialCourseId={enrolledCourses[0]?.id || null}
+          currentProfile={profile}
           onToggleLessonProgress={onToggleLessonProgress}
           onAskUstadh={(subj) => {
             setSubject(subj);
             setActiveTab('inbox');
           }}
           onOpenCourseCatalog={onBrowseCourses}
+          onSubmitSurvey={onSubmitSurvey}
         />
       )}
 
@@ -1996,6 +2211,22 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </div>
         </div>
       )}
+      {/* Course Details & Syllabus Modal */}
+      <CourseDetailsModal
+        course={detailedCourseModal}
+        lessons={lessons}
+        isEnrolled={enrolledCourseIds.includes(detailedCourseModal?.id || 0)}
+        onClose={() => setDetailedCourseModal(null)}
+        onWatchCourse={(c) => {
+          setDetailedCourseModal(null);
+          onWatchCourse(c);
+        }}
+        onEnrollCourse={(c) => {
+          setDetailedCourseModal(null);
+          onEnrollCourse(c.id);
+        }}
+      />
+
       {/* Interactive Fullscreen Animated PDF Reader Modal */}
       {activePdfModal && (
         <AnimatedPdfViewer

@@ -144,9 +144,103 @@ export const mediaUploads = pgTable('media_uploads', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const lessonComments = pgTable('lesson_comments', {
+  id: serial('id').primaryKey(),
+  lessonId: integer('lesson_id')
+    .references(() => lessons.id)
+    .notNull(),
+  courseId: integer('course_id')
+    .references(() => courses.id)
+    .notNull(),
+  authorId: integer('author_id')
+    .references(() => profiles.id)
+    .notNull(),
+  authorName: text('author_name').notNull(),
+  authorRole: text('author_role').notNull().default('student'), // 'student' | 'instructor' | 'admin'
+  authorAvatar: text('author_avatar'),
+  parentId: integer('parent_id'), // null for top-level, or id of parent comment for replies
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const announcements = pgTable('announcements', {
+  id: serial('id').primaryKey(),
+  courseId: integer('course_id').references(() => courses.id), // null if general academy announcement
+  instructorId: integer('instructor_id')
+    .references(() => profiles.id)
+    .notNull(),
+  instructorName: text('instructor_name').notNull().default('Ustadh Mustaqeem Shaikh'),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  priority: text('priority').notNull().default('normal'), // 'normal' | 'important'
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const roleApplications = pgTable('role_applications', {
+  id: serial('id').primaryKey(),
+  applicantId: integer('applicant_id')
+    .references(() => profiles.id)
+    .notNull(),
+  applicantName: text('applicant_name').notNull(),
+  applicantEmail: text('applicant_email').notNull(),
+  requestedRole: text('requested_role').notNull().default('instructor'), // 'instructor' | 'admin'
+  reason: text('reason').notNull(),
+  credentialsBio: text('credentials_bio'),
+  status: text('status').notNull().default('pending'), // 'pending' | 'approved' | 'rejected'
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const classSurveys = pgTable('class_surveys', {
+  id: serial('id').primaryKey(),
+  courseId: integer('course_id')
+    .references(() => courses.id)
+    .notNull(),
+  lessonId: integer('lesson_id').references(() => lessons.id),
+  studentId: integer('student_id')
+    .references(() => profiles.id)
+    .notNull(),
+  studentName: text('student_name').notNull(),
+  instructorId: integer('instructor_id').references(() => profiles.id),
+  rating: text('rating').notNull(), // 'satisfactory' | 'unsatisfactory'
+  comment: text('comment'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const studentArticles = pgTable('student_articles', {
+  id: serial('id').primaryKey(),
+  studentId: integer('student_id')
+    .references(() => profiles.id)
+    .notNull(),
+  authorName: text('author_name').notNull(),
+  authorEmail: text('author_email').notNull(),
+  authorRole: text('author_role').notNull().default('student'),
+  title: text('title').notNull(),
+  category: text('category').notNull().default('Islamic Studies'),
+  abstract: text('abstract'),
+  content: text('content').notNull(),
+  attachmentUrl: text('attachment_url'),
+  readTime: text('read_time').default('5 min read'),
+  published: boolean('published').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const courseAttendance = pgTable('course_attendance', {
+  id: serial('id').primaryKey(),
+  studentId: integer('student_id')
+    .references(() => profiles.id)
+    .notNull(),
+  courseId: integer('course_id')
+    .references(() => courses.id)
+    .notNull(),
+  date: text('date').notNull(), // YYYY-MM-DD
+  status: text('status').notNull().default('present'), // 'present' | 'absent' | 'late'
+  joinedAt: timestamp('joined_at').defaultNow(),
+});
+
 export const profilesRelations = relations(profiles, ({ many }) => ({
   courses: many(courses),
   enrollments: many(enrollments),
+  comments: many(lessonComments),
 }));
 
 export const coursesRelations = relations(courses, ({ one, many }) => ({
@@ -157,12 +251,26 @@ export const coursesRelations = relations(courses, ({ one, many }) => ({
   lessons: many(lessons),
   enrollments: many(enrollments),
   events: many(courseEvents),
+  comments: many(lessonComments),
+  announcements: many(announcements),
 }));
 
-export const lessonsRelations = relations(lessons, ({ one }) => ({
+export const lessonsRelations = relations(lessons, ({ one, many }) => ({
   course: one(courses, {
     fields: [lessons.courseId],
     references: [courses.id],
+  }),
+  comments: many(lessonComments),
+}));
+
+export const lessonCommentsRelations = relations(lessonComments, ({ one }) => ({
+  lesson: one(lessons, {
+    fields: [lessonComments.lessonId],
+    references: [lessons.id],
+  }),
+  author: one(profiles, {
+    fields: [lessonComments.authorId],
+    references: [profiles.id],
   }),
 }));
 

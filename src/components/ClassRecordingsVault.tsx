@@ -22,9 +22,13 @@ import {
   Eye,
   FileText,
 } from 'lucide-react';
-import { Course, Lesson, Enrollment } from '../types.ts';
+import { Course, Lesson, Enrollment, LessonComment, Profile } from '../types.ts';
 import { resolveThumbnailUrl } from '../lib/assets.ts';
 import { resolvePlayableVideoUrl } from '../lib/mediaStorage.ts';
+import { LessonThreadedComments } from './LessonThreadedComments.tsx';
+import { ClassSessionSurveyWidget } from './ClassSessionSurveyWidget.tsx';
+import { smartApiFetch } from '../lib/fallbackStore.ts';
+import { useAuth } from '../context/AuthContext.tsx';
 
 interface ClassRecordingsVaultProps {
   courses: Course[];
@@ -32,9 +36,16 @@ interface ClassRecordingsVaultProps {
   enrollments: Enrollment[];
   initialCourseId?: number | null;
   initialLessonId?: number | null;
+  currentProfile?: Profile | null;
   onToggleLessonProgress?: (courseId: number, lessonId: number) => Promise<void>;
   onAskUstadh?: (subject: string) => void;
   onOpenCourseCatalog?: () => void;
+  onSubmitSurvey?: (
+    rating: 'satisfactory' | 'unsatisfactory',
+    comment: string,
+    courseId: number,
+    lessonId?: number
+  ) => Promise<void>;
 }
 
 export const ClassRecordingsVault: React.FC<ClassRecordingsVaultProps> = ({
@@ -43,10 +54,13 @@ export const ClassRecordingsVault: React.FC<ClassRecordingsVaultProps> = ({
   enrollments,
   initialCourseId,
   initialLessonId,
+  currentProfile,
   onToggleLessonProgress,
   onAskUstadh,
   onOpenCourseCatalog,
+  onSubmitSurvey,
 }) => {
+  const { authFetch } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCourseFilter, setSelectedCourseFilter] = useState<number | 'all'>(
     initialCourseId || 'all'
@@ -56,6 +70,9 @@ export const ClassRecordingsVault: React.FC<ClassRecordingsVaultProps> = ({
   const [videoHasError, setVideoHasError] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [resolvedVideoUrl, setResolvedVideoUrl] = useState<string>('');
+
+  const [lessonComments, setLessonComments] = useState<LessonComment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
 
   const enrolledCourseIds = useMemo(
     () => enrollments.map((e) => e.courseId),
@@ -159,6 +176,85 @@ export const ClassRecordingsVault: React.FC<ClassRecordingsVaultProps> = ({
       isCancelled = true;
     };
   }, [activeLesson?.videoUrl]);
+
+  // Fetch comments for active recording
+  useEffect(() => {
+    if (!activeLesson?.id) {
+      setLessonComments([]);
+      return;
+    }
+    let isCancelled = false;
+    setLoadingComments(true);
+    const fetchFn = authFetch || smartApiFetch;
+    fetchFn(`/api/comments?lessonId=${activeLesson.id}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (!isCancelled) {
+          setLessonComments(Array.isArray(data) ? data : []);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) setLessonComments([]);
+      })
+      .finally(() => {
+        if (!isCancelled) setLoadingComments(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeLesson?.id, authFetch]);
+
+  const handlePostComment = async (
+    lessonId: number,
+    content: string,
+    parentId?: number | null
+  ) => {
+    try {
+      const fetchFn = authFetch || smartApiFetch;
+      const res = await fetchFn('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lessonId,
+          content,
+          parentId: parentId || null,
+        }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setLessonComments((prev) => [...prev, created]);
+      } else {
+        const fallbackComment: LessonComment = {
+          id: Date.now(),
+          courseId: activeLesson?.courseId || 1,
+          lessonId,
+          authorId: currentProfile?.id || 1,
+          authorName: currentProfile?.fullName || 'Student',
+          authorRole: currentProfile?.role || 'student',
+          authorAvatar: currentProfile?.avatarUrl || null,
+          content,
+          parentId: parentId || null,
+          createdAt: new Date().toISOString(),
+        };
+        setLessonComments((prev) => [...prev, fallbackComment]);
+      }
+    } catch {
+      const fallbackComment: LessonComment = {
+        id: Date.now(),
+        courseId: activeLesson?.courseId || 1,
+        lessonId,
+        authorId: currentProfile?.id || 1,
+        authorName: currentProfile?.fullName || 'Student',
+        authorRole: currentProfile?.role || 'student',
+        authorAvatar: currentProfile?.avatarUrl || null,
+        content,
+        parentId: parentId || null,
+        createdAt: new Date().toISOString(),
+      };
+      setLessonComments((prev) => [...prev, fallbackComment]);
+    }
+  };
 
   const isEmbed = (url?: string) => {
     if (!url) return false;
@@ -599,6 +695,46 @@ export const ClassRecordingsVault: React.FC<ClassRecordingsVaultProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Quick Class & Teacher Feedback Survey for this Session */}
+              {activeCourse && (
+                <ClassSessionSurveyWidget
+                  courseId={activeCourse.id}
+                  courseTitle={activeCourse.title}
+                  lessonId={activeLesson.id}
+                  lessonTitle={activeLesson.title}
+                  instructorName={activeCourse.instructorName}
+                  currentProfile={currentProfile || null}
+                  onSubmitSurvey={async (rating, comment) => {
+                    if (onSubmitSurvey) {
+                      await onSubmitSurvey(rating, comment, activeCourse.id, activeLesson.id);
+                    } else {
+                      const fetchFn = authFetch || smartApiFetch;
+                      await fetchFn('/api/class-surveys', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          courseId: activeCourse.id,
+                          lessonId: activeLesson.id,
+                          instructorId: activeCourse.instructorId || null,
+                          rating,
+                          comment,
+                        }),
+                      });
+                    }
+                  }}
+                />
+              )}
+
+              {/* Threaded Discussion and Student-Instructor Q&A */}
+              <LessonThreadedComments
+                lessonId={activeLesson.id}
+                lessonTitle={activeLesson.title}
+                courseId={activeLesson.courseId}
+                comments={lessonComments}
+                currentProfile={currentProfile || null}
+                onPostComment={handlePostComment}
+              />
             </div>
           ) : (
             <div className="p-12 text-center academy-surface rounded-2xl border border-slate-800 space-y-3">

@@ -37,6 +37,9 @@ import { CourseEnrollmentModal } from './components/CourseEnrollmentModal.tsx';
 import { CoolEnrollmentView } from './components/CoolEnrollmentView.tsx';
 import { NavigationLoadingOverlay } from './components/NavigationLoadingOverlay.tsx';
 import { OpenEnrollmentHeroBanner } from './components/OpenEnrollmentHeroBanner.tsx';
+import { RoleApplicationModal } from './components/RoleApplicationModal.tsx';
+import { InfiniteCourseMarquee } from './components/InfiniteCourseMarquee.tsx';
+import { CourseDetailsModal } from './components/CourseDetailsModal.tsx';
 import {
   Course,
   Lesson,
@@ -45,6 +48,8 @@ import {
   Profile,
   Enrollment,
   CalendarSettings,
+  Announcement,
+  RoleApplication,
   parseCourseTags,
 } from './types.ts';
 import { resolveThumbnailUrl, ACADEMY_ASSETS } from './lib/assets.ts';
@@ -99,12 +104,13 @@ function AcademyPortalContent() {
 
   // Show the animated Logo Splash Intro first before transitioning into the homepage
   const [showSplash, setShowSplash] = useState<boolean>(true);
-  // Big Open for Enrollment box (Seerahverse / Source Code style) that appears on website with a cross button to dismiss
-  const [showEnrollmentModalBox, setShowEnrollmentModalBox] = useState<boolean>(true);
+  // Enrollment banner modal box dismissed by default for spacious, clean browsing
+  const [showEnrollmentModalBox, setShowEnrollmentModalBox] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<ActiveView>('home');
   const [adminInitialModule, setAdminInitialModule] = useState<AdminModule>('courses');
   const [watchingCourse, setWatchingCourse] = useState<Course | null>(null);
   const [enrollingCourse, setEnrollingCourse] = useState<Course | null>(null);
+  const [inspectingCourseDetails, setInspectingCourseDetails] = useState<Course | null>(null);
   const [enrollmentStatusFilter, setEnrollmentStatusFilter] = useState<'all' | 'open' | 'coming_soon' | 'live'>('all');
 
   const [courses, setCourses] = useState<Course[]>([]);
@@ -113,6 +119,9 @@ function AcademyPortalContent() {
   const [slides, setSlides] = useState<HomepageSlide[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [roleApplications, setRoleApplications] = useState<RoleApplication[]>([]);
+  const [isRoleApplicationOpen, setIsRoleApplicationOpen] = useState<boolean>(false);
   const [calendarSettings, setCalendarSettings] = useState<CalendarSettings | undefined>(undefined);
   const [loadingPortal, setLoadingPortal] = useState<boolean>(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -180,6 +189,8 @@ function AcademyPortalContent() {
         setSlides(data.slides || []);
         setProfiles(data.profiles || []);
         setEnrollments(data.enrollments || []);
+        setAnnouncements(data.announcements || []);
+        setRoleApplications(data.roleApplications || []);
         if (data.calendarSettings) {
           setCalendarSettings(data.calendarSettings);
         }
@@ -622,6 +633,8 @@ function AcademyPortalContent() {
                   enrollments={enrollments}
                   messages={messages}
                   homework={homework}
+                  announcements={announcements}
+                  roleApplications={roleApplications}
                   authFetch={authFetch}
                   onUploadFile={uploadMediaFile}
                   onRefreshData={handleRefreshAll}
@@ -645,6 +658,7 @@ function AcademyPortalContent() {
                   messages={messages}
                   homework={homework}
                   allProfiles={profiles}
+                  announcements={announcements}
                   onWatchCourse={(course) => setWatchingCourse(course)}
                   onEnrollCourse={async (courseId) => {
                     const c = courses.find((item) => item.id === courseId);
@@ -663,6 +677,25 @@ function AcademyPortalContent() {
                   onSubmitFeedback={handleSubmitFeedback}
                   onUploadFile={uploadMediaFile}
                   onBrowseCourses={() => handleNavigateWithLogo('courses')}
+                  onOpenRoleApplication={() => setIsRoleApplicationOpen(true)}
+                  onSubmitSurvey={async (rating, comment, courseId, lessonId) => {
+                    try {
+                      await authFetch('/api/class-surveys', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          rating,
+                          comment,
+                          courseId,
+                          lessonId: lessonId || null,
+                          instructorId: courses.find((c) => c.id === courseId)?.instructorId || null,
+                        }),
+                      });
+                      showToast('JazakAllahu Khairan for your class session feedback!');
+                    } catch (e: any) {
+                      showToast('Session feedback recorded.');
+                    }
+                  }}
                 />
               </motion.div>
             ) : activeView === 'calendar' ? (
@@ -831,6 +864,22 @@ function AcademyPortalContent() {
                           setAdminInitialModule('homepage_media');
                           handleNavigateWithLogo('admin');
                         }}
+                      />
+                    </motion.div>
+
+                    {/* Continuous Looping Course Stream / Infinite Marquee (Source Code Style) */}
+                    <motion.div variants={sectionRevealVariants}>
+                      <InfiniteCourseMarquee
+                        courses={publishedCourses}
+                        lessons={lessons}
+                        enrollments={enrollments}
+                        enrolledCourseIds={enrolledCourseIds}
+                        onWatchCourse={(c) => setWatchingCourse(c)}
+                        onEnrollCourse={(c) => {
+                          setEnrollingCourse(c);
+                          handleNavigateWithLogo('enroll', 'Preparing Course Matriculation...', c.title);
+                        }}
+                        onViewCourseDetails={(c) => setInspectingCourseDetails(c)}
                       />
                     </motion.div>
                   </>
@@ -1606,6 +1655,50 @@ function AcademyPortalContent() {
           }}
         />
       )}
+
+      {/* Admin / Teacher Access Application Modal */}
+      <RoleApplicationModal
+        isOpen={isRoleApplicationOpen}
+        onClose={() => setIsRoleApplicationOpen(false)}
+        currentProfile={profile}
+        onSubmitApplication={async (requestedRole, reason, credentialsBio) => {
+          const res = await authFetch('/api/role-applications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              applicantId: profile?.id || 1,
+              applicantName: profile?.fullName || 'Student',
+              applicantEmail: profile?.email || '',
+              requestedRole,
+              reason,
+              credentialsBio,
+            }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || 'Failed to submit application');
+          }
+          showToast('Access application submitted successfully to administration!');
+          await handleRefreshAll();
+        }}
+      />
+
+      {/* Course Details Modal (Shows Syllabus & Teacher Uploaded Files) */}
+      <CourseDetailsModal
+        course={inspectingCourseDetails}
+        lessons={lessons}
+        isEnrolled={enrolledCourseIds.includes(inspectingCourseDetails?.id || 0)}
+        onClose={() => setInspectingCourseDetails(null)}
+        onWatchCourse={(c) => {
+          setInspectingCourseDetails(null);
+          setWatchingCourse(c);
+        }}
+        onEnrollCourse={(c) => {
+          setInspectingCourseDetails(null);
+          setEnrollingCourse(c);
+          handleNavigateWithLogo('enroll', 'Preparing Course Matriculation...', c.title);
+        }}
+      />
     </div>
   );
 }

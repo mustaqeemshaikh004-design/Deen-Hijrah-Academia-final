@@ -41,6 +41,21 @@ import {
   createMediaUpload,
   getMediaUploadById,
   clearAllContentToBlank,
+  getCommentsForLesson,
+  createLessonComment,
+  getAllAnnouncements,
+  createAnnouncement,
+  deleteAnnouncement,
+  getAllRoleApplications,
+  createRoleApplication,
+  updateRoleApplicationStatus,
+  getClassSurveysForCourse,
+  createClassSurvey,
+  getAllStudentArticles,
+  createStudentArticle,
+  deleteStudentArticle,
+  getStudentAttendanceForCourse,
+  logStudentAttendance,
 } from './src/db/queries.ts';
 import { ensureInitialAcademySetup } from './src/db/seed.ts';
 
@@ -200,15 +215,25 @@ app.get('/api/portal-data', async (_req, res) => {
       initialSeedChecked = true;
     }
 
-    const [coursesList, lessonsList, eventsList, slidesList, profilesList, enrollmentsList] =
-      await Promise.all([
-        getAllCourses(),
-        getAllLessons(),
-        getAllCourseEvents(),
-        getAllHomepageSlides(),
-        getAllProfiles(),
-        getAllEnrollments(),
-      ]);
+    const [
+      coursesList,
+      lessonsList,
+      eventsList,
+      slidesList,
+      profilesList,
+      enrollmentsList,
+      announcementsList,
+      applicationsList,
+    ] = await Promise.all([
+      getAllCourses(),
+      getAllLessons(),
+      getAllCourseEvents(),
+      getAllHomepageSlides(),
+      getAllProfiles(),
+      getAllEnrollments(),
+      getAllAnnouncements(),
+      getAllRoleApplications(),
+    ]);
 
     const sanitizedProfiles = profilesList.map((p) => ({
       ...p,
@@ -225,6 +250,8 @@ app.get('/api/portal-data', async (_req, res) => {
       slides: slidesList,
       profiles: sanitizedProfiles,
       enrollments: enrollmentsList,
+      announcements: announcementsList,
+      roleApplications: applicationsList,
       calendarSettings: globalCalendarSettings,
     });
   } catch (error: any) {
@@ -884,6 +911,305 @@ app.put('/api/messages/:id/read', requireAuth, async (req: AuthRequest, res) => 
   } catch (error: any) {
     console.error('Failed to mark message read:', error);
     res.status(500).json({ error: error.message || 'Failed to mark message as read' });
+  }
+});
+
+// ==========================================
+// 1. Threaded Lesson Comments Endpoints
+// ==========================================
+app.get('/api/lessons/:id/comments', async (req: Request, res: Response) => {
+  try {
+    const lessonId = Number(req.params.id);
+    const comments = await getCommentsForLesson(lessonId);
+    res.json(comments);
+  } catch (error: any) {
+    console.error('Failed to fetch lesson comments:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch comments' });
+  }
+});
+
+app.post('/api/lessons/:id/comments', async (req: Request, res: Response) => {
+  try {
+    const lessonId = Number(req.params.id);
+    const { courseId, authorId, authorName, authorRole, authorAvatar, parentId, content } = req.body;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Comment content is required' });
+    }
+
+    const created = await createLessonComment({
+      lessonId,
+      courseId: Number(courseId) || 1,
+      authorId: Number(authorId) || 1,
+      authorName: String(authorName || 'Student'),
+      authorRole: String(authorRole || 'student'),
+      authorAvatar: authorAvatar ? String(authorAvatar) : null,
+      parentId: parentId ? Number(parentId) : null,
+      content: String(content).trim(),
+    });
+    res.json(created);
+  } catch (error: any) {
+    console.error('Failed to post lesson comment:', error);
+    res.status(500).json({ error: error.message || 'Failed to post comment' });
+  }
+});
+
+// ==========================================
+// 2. Announcements Endpoints
+// ==========================================
+app.get('/api/announcements', async (req: Request, res: Response) => {
+  try {
+    const courseId = req.query.courseId ? Number(req.query.courseId) : null;
+    const list = await getAllAnnouncements(courseId);
+    res.json(list);
+  } catch (error: any) {
+    console.error('Failed to fetch announcements:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch announcements' });
+  }
+});
+
+app.post('/api/announcements', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { courseId, title, content, priority, instructorName } = req.body;
+    if (!title || !content) {
+      return res.status(400).json({ error: 'Title and content are required' });
+    }
+    const uid = req.user?.uid || 'founder-mustaqeem-shaikh';
+    const email = req.user?.email || 'mustaqeemshaikh004@gmail.com';
+    const profile = await getOrCreateProfile(uid, email);
+
+    const created = await createAnnouncement({
+      courseId: courseId ? Number(courseId) : null,
+      instructorId: profile.id,
+      instructorName: instructorName || profile.fullName || 'Ustadh Mustaqeem Shaikh',
+      title: String(title).trim(),
+      content: String(content).trim(),
+      priority: priority === 'important' ? 'important' : 'normal',
+    });
+    res.json(created);
+  } catch (error: any) {
+    console.error('Failed to create announcement:', error);
+    res.status(500).json({ error: error.message || 'Failed to create announcement' });
+  }
+});
+
+app.delete('/api/announcements/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const id = Number(req.params.id);
+    await deleteAnnouncement(id);
+    res.json({ success: true, id });
+  } catch (error: any) {
+    console.error('Failed to delete announcement:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete announcement' });
+  }
+});
+
+// ==========================================
+// 3. Admin / Teacher Role Applications
+// ==========================================
+app.get('/api/role-applications', requireAuth, async (_req: AuthRequest, res) => {
+  try {
+    const apps = await getAllRoleApplications();
+    res.json(apps);
+  } catch (error: any) {
+    console.error('Failed to fetch applications:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch applications' });
+  }
+});
+
+app.post('/api/role-applications', async (req: Request, res: Response) => {
+  try {
+    const { applicantId, applicantName, applicantEmail, requestedRole, reason, credentialsBio } = req.body;
+    if (!applicantEmail || !reason) {
+      return res.status(400).json({ error: 'Email and reason are required' });
+    }
+    const created = await createRoleApplication({
+      applicantId: Number(applicantId) || 1,
+      applicantName: String(applicantName || 'Applicant'),
+      applicantEmail: String(applicantEmail).toLowerCase().trim(),
+      requestedRole: requestedRole === 'admin' ? 'admin' : 'instructor',
+      reason: String(reason).trim(),
+      credentialsBio: credentialsBio ? String(credentialsBio).trim() : null,
+      status: 'pending',
+    });
+    res.json(created);
+  } catch (error: any) {
+    console.error('Failed to submit role application:', error);
+    res.status(500).json({ error: error.message || 'Failed to submit application' });
+  }
+});
+
+app.put('/api/role-applications/:id', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const applicationId = Number(req.params.id);
+    const { status, applicantId, requestedRole } = req.body;
+    if (status !== 'approved' && status !== 'rejected') {
+      return res.status(400).json({ error: 'Status must be approved or rejected' });
+    }
+    const updated = await updateRoleApplicationStatus(applicationId, status);
+    if (status === 'approved' && applicantId && requestedRole) {
+      await updateProfileRole(Number(applicantId), requestedRole);
+    }
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Failed to update application status:', error);
+    res.status(500).json({ error: error.message || 'Failed to update application' });
+  }
+});
+
+// ==========================================
+// 4. Daily / Class Day Session Surveys
+// ==========================================
+app.get('/api/class-surveys', async (req: Request, res: Response) => {
+  try {
+    const courseId = Number(req.query.courseId) || 0;
+    const surveys = await getClassSurveysForCourse(courseId);
+    res.json(surveys);
+  } catch (error: any) {
+    console.error('Failed to fetch class surveys:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch surveys' });
+  }
+});
+
+app.post('/api/class-surveys', async (req: Request, res: Response) => {
+  try {
+    const { courseId, lessonId, studentId, studentName, instructorId, rating, comment } = req.body;
+    if (!courseId || !rating) {
+      return res.status(400).json({ error: 'Course and rating are required' });
+    }
+    const cleanRating = rating === 'unsatisfactory' ? 'unsatisfactory' : 'satisfactory';
+    const created = await createClassSurvey({
+      courseId: Number(courseId),
+      lessonId: lessonId ? Number(lessonId) : null,
+      studentId: Number(studentId) || 1,
+      studentName: String(studentName || 'Student'),
+      instructorId: instructorId ? Number(instructorId) : null,
+      rating: cleanRating,
+      comment: comment ? String(comment).trim() : null,
+    });
+    res.json(created);
+  } catch (error: any) {
+    console.error('Failed to submit class survey:', error);
+    res.status(500).json({ error: error.message || 'Failed to record class survey' });
+  }
+});
+
+// ==========================================
+// 5. Student Research Papers & Articles (Blogs)
+// ==========================================
+app.get('/api/articles', async (_req: Request, res: Response) => {
+  try {
+    const list = await getAllStudentArticles();
+    res.json(list);
+  } catch (error: any) {
+    console.error('Failed to fetch articles:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch articles' });
+  }
+});
+
+app.post('/api/articles', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { title, category, abstract, content, attachmentUrl, readTime } = req.body;
+    if (!title || !content) {
+      return res.status(400).json({ error: 'Title and content are required' });
+    }
+    const uid = req.user?.uid || 'student';
+    const email = req.user?.email || 'student@deenhijrah.edu';
+    const profile = await getOrCreateProfile(uid, email);
+
+    const created = await createStudentArticle({
+      studentId: profile.id,
+      authorName: profile.fullName,
+      authorEmail: profile.email,
+      authorRole: profile.role,
+      title: String(title).trim(),
+      category: String(category || 'Islamic Studies').trim(),
+      abstract: abstract ? String(abstract).trim() : null,
+      content: String(content).trim(),
+      attachmentUrl: attachmentUrl || null,
+      readTime: String(readTime || '5 min read').trim(),
+      published: true,
+    });
+    res.json(created);
+  } catch (error: any) {
+    console.error('Failed to publish article:', error);
+    res.status(500).json({ error: error.message || 'Failed to publish article' });
+  }
+});
+
+app.delete('/api/articles/:id', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    await deleteStudentArticle(id);
+    res.json({ success: true, id });
+  } catch (error: any) {
+    console.error('Failed to delete article:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete article' });
+  }
+});
+
+// ==========================================
+// 6. Student Course Auto-Attendance
+// ==========================================
+app.get('/api/attendance', async (req: Request, res: Response) => {
+  try {
+    const studentId = Number(req.query.studentId);
+    const courseId = Number(req.query.courseId);
+    if (!studentId || !courseId) {
+      return res.status(400).json({ error: 'studentId and courseId are required' });
+    }
+    const records = await getStudentAttendanceForCourse(studentId, courseId);
+    res.json(records);
+  } catch (error: any) {
+    console.error('Failed to fetch attendance:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch attendance' });
+  }
+});
+
+app.post('/api/attendance/auto-log', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { courseId, date, scheduledStartTime, sourceTimezone } = req.body;
+    if (!courseId) {
+      return res.status(400).json({ error: 'courseId is required' });
+    }
+    const uid = req.user?.uid || 'student';
+    const email = req.user?.email || 'student@deenhijrah.edu';
+    const profile = await getOrCreateProfile(uid, email);
+
+    const todayDate = date || new Date().toISOString().split('T')[0];
+    const now = new Date();
+
+    // Check on-time window (on time or up to 10 min after scheduled start time)
+    let status: 'present' | 'absent' | 'late' = 'present';
+    if (scheduledStartTime) {
+      const [startHour, startMin] = scheduledStartTime.split(':').map(Number);
+      if (!isNaN(startHour) && !isNaN(startMin)) {
+        const scheduledTime = new Date();
+        scheduledTime.setHours(startHour, startMin, 0, 0);
+        const diffMinutes = (now.getTime() - scheduledTime.getTime()) / (1000 * 60);
+
+        // If student joins > 10 min late
+        if (diffMinutes > 10) {
+          status = 'late';
+        } else if (diffMinutes < -120) {
+          // Joined hours early or outside window
+          status = 'present';
+        } else {
+          status = 'present';
+        }
+      }
+    }
+
+    const record = await logStudentAttendance({
+      studentId: profile.id,
+      courseId: Number(courseId),
+      date: todayDate,
+      status,
+    });
+    res.json(record);
+  } catch (error: any) {
+    console.error('Failed to log auto-attendance:', error);
+    res.status(500).json({ error: error.message || 'Failed to log auto-attendance' });
   }
 });
 

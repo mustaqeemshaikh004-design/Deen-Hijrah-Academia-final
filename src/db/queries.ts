@@ -10,6 +10,12 @@ import {
   messages,
   homeworkSubmissions,
   mediaUploads,
+  lessonComments,
+  announcements,
+  roleApplications,
+  classSurveys,
+  studentArticles,
+  courseAttendance,
 } from './schema.ts';
 
 export async function getOrCreateProfile(
@@ -707,9 +713,215 @@ export async function clearAllContentToBlank() {
     await db.delete(courseEvents);
     await db.delete(courses);
     await db.delete(homepageSlides);
+    await db.delete(lessonComments);
+    await db.delete(announcements);
+    await db.delete(classSurveys);
     return { success: true };
   } catch (error) {
     console.error('Database query failed in clearAllContentToBlank:', error);
     throw new Error('Failed to clear portal content.', { cause: error });
+  }
+}
+
+// 1. Threaded Lesson Comments Queries
+export async function getCommentsForLesson(lessonId: number) {
+  try {
+    return await db
+      .select()
+      .from(lessonComments)
+      .where(eq(lessonComments.lessonId, lessonId))
+      .orderBy(asc(lessonComments.createdAt));
+  } catch (error) {
+    console.error('Database query failed in getCommentsForLesson:', error);
+    return [];
+  }
+}
+
+export async function createLessonComment(data: typeof lessonComments.$inferInsert) {
+  try {
+    const inserted = await db.insert(lessonComments).values(data).returning();
+    return inserted[0];
+  } catch (error) {
+    console.error('Database query failed in createLessonComment:', error);
+    throw new Error('Failed to post question or reply.', { cause: error });
+  }
+}
+
+// 2. Announcements Queries
+export async function getAllAnnouncements(courseId?: number | null) {
+  try {
+    if (courseId) {
+      return await db
+        .select()
+        .from(announcements)
+        .where(or(eq(announcements.courseId, courseId), eq(announcements.courseId, 0)))
+        .orderBy(desc(announcements.createdAt));
+    }
+    return await db
+      .select()
+      .from(announcements)
+      .orderBy(desc(announcements.createdAt));
+  } catch (error) {
+    console.error('Database query failed in getAllAnnouncements:', error);
+    return [];
+  }
+}
+
+export async function createAnnouncement(data: typeof announcements.$inferInsert) {
+  try {
+    const inserted = await db.insert(announcements).values(data).returning();
+    return inserted[0];
+  } catch (error) {
+    console.error('Database query failed in createAnnouncement:', error);
+    throw new Error('Failed to publish announcement.', { cause: error });
+  }
+}
+
+export async function deleteAnnouncement(id: number) {
+  try {
+    await db.delete(announcements).where(eq(announcements.id, id));
+    return { success: true };
+  } catch (error) {
+    console.error('Database query failed in deleteAnnouncement:', error);
+    throw new Error('Failed to delete announcement.', { cause: error });
+  }
+}
+
+// 3. Admin / Faculty Role Applications
+export async function getAllRoleApplications() {
+  try {
+    return await db
+      .select()
+      .from(roleApplications)
+      .orderBy(desc(roleApplications.createdAt));
+  } catch (error) {
+    console.error('Database query failed in getAllRoleApplications:', error);
+    return [];
+  }
+}
+
+export async function createRoleApplication(data: typeof roleApplications.$inferInsert) {
+  try {
+    const inserted = await db.insert(roleApplications).values(data).returning();
+    return inserted[0];
+  } catch (error) {
+    console.error('Database query failed in createRoleApplication:', error);
+    throw new Error('Failed to submit application.', { cause: error });
+  }
+}
+
+export async function updateRoleApplicationStatus(id: number, status: 'approved' | 'rejected') {
+  try {
+    const updated = await db
+      .update(roleApplications)
+      .set({ status })
+      .where(eq(roleApplications.id, id))
+      .returning();
+    return updated[0];
+  } catch (error) {
+    console.error('Database query failed in updateRoleApplicationStatus:', error);
+    throw new Error('Failed to update application status.', { cause: error });
+  }
+}
+
+// 4. Daily / Class Day Session Surveys
+export async function getClassSurveysForCourse(courseId: number) {
+  try {
+    return await db
+      .select()
+      .from(classSurveys)
+      .where(eq(classSurveys.courseId, courseId))
+      .orderBy(desc(classSurveys.createdAt));
+  } catch (error) {
+    console.error('Database query failed in getClassSurveysForCourse:', error);
+    return [];
+  }
+}
+
+export async function createClassSurvey(data: typeof classSurveys.$inferInsert) {
+  try {
+    const inserted = await db.insert(classSurveys).values(data).returning();
+    return inserted[0];
+  } catch (error) {
+    console.error('Database query failed in createClassSurvey:', error);
+    throw new Error('Failed to record class feedback.', { cause: error });
+  }
+}
+
+// 5. Student Articles & Research Papers
+export async function getAllStudentArticles() {
+  try {
+    return await db
+      .select()
+      .from(studentArticles)
+      .where(eq(studentArticles.published, true))
+      .orderBy(desc(studentArticles.createdAt));
+  } catch (error) {
+    console.error('Database query failed in getAllStudentArticles:', error);
+    return [];
+  }
+}
+
+export async function createStudentArticle(data: typeof studentArticles.$inferInsert) {
+  try {
+    const inserted = await db.insert(studentArticles).values(data).returning();
+    return inserted[0];
+  } catch (error) {
+    console.error('Database query failed in createStudentArticle:', error);
+    throw new Error('Failed to publish student research article.', { cause: error });
+  }
+}
+
+export async function deleteStudentArticle(id: number) {
+  try {
+    await db.delete(studentArticles).where(eq(studentArticles.id, id));
+    return { success: true };
+  } catch (error) {
+    console.error('Database query failed in deleteStudentArticle:', error);
+    throw new Error('Failed to delete student article.', { cause: error });
+  }
+}
+
+// 6. Student Course Auto-Attendance
+export async function getStudentAttendanceForCourse(studentId: number, courseId: number) {
+  try {
+    return await db
+      .select()
+      .from(courseAttendance)
+      .where(and(eq(courseAttendance.studentId, studentId), eq(courseAttendance.courseId, courseId)))
+      .orderBy(desc(courseAttendance.date));
+  } catch (error) {
+    console.error('Database query failed in getStudentAttendanceForCourse:', error);
+    return [];
+  }
+}
+
+export async function logStudentAttendance(data: typeof courseAttendance.$inferInsert) {
+  try {
+    const existing = await db
+      .select()
+      .from(courseAttendance)
+      .where(
+        and(
+          eq(courseAttendance.studentId, data.studentId),
+          eq(courseAttendance.courseId, data.courseId),
+          eq(courseAttendance.date, data.date)
+        )
+      );
+
+    if (existing.length > 0) {
+      const updated = await db
+        .update(courseAttendance)
+        .set({ status: data.status, joinedAt: new Date() })
+        .where(eq(courseAttendance.id, existing[0].id))
+        .returning();
+      return updated[0];
+    }
+
+    const inserted = await db.insert(courseAttendance).values(data).returning();
+    return inserted[0];
+  } catch (error) {
+    console.error('Database query failed in logStudentAttendance:', error);
+    throw new Error('Failed to log attendance.', { cause: error });
   }
 }

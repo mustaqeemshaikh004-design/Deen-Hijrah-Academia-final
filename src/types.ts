@@ -179,3 +179,77 @@ export interface HomeworkSubmission {
   feedback?: string | null;
   submittedAt?: string;
 }
+
+export interface LessonComment {
+  id: number;
+  lessonId: number;
+  courseId: number;
+  authorId: number;
+  authorName: string;
+  authorRole: UserRole;
+  authorAvatar?: string | null;
+  parentId?: number | null;
+  content: string;
+  createdAt: string;
+  replies?: LessonComment[];
+}
+
+export interface Announcement {
+  id: number;
+  courseId?: number | null;
+  instructorId: number;
+  instructorName: string;
+  title: string;
+  content: string;
+  priority: 'normal' | 'important';
+  createdAt: string;
+}
+
+export interface RoleApplication {
+  id: number;
+  applicantId: number;
+  applicantName: string;
+  applicantEmail: string;
+  requestedRole: 'instructor' | 'admin';
+  reason: string;
+  credentialsBio?: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+}
+
+export interface ClassSurvey {
+  id: number;
+  courseId: number;
+  lessonId?: number | null;
+  studentId: number;
+  studentName: string;
+  instructorId?: number | null;
+  rating: 'satisfactory' | 'unsatisfactory';
+  comment?: string | null;
+  createdAt: string;
+}
+
+export interface StudentArticle {
+  id: number;
+  studentId: number;
+  authorName: string;
+  authorEmail: string;
+  authorRole: UserRole;
+  title: string;
+  category: string;
+  abstract?: string | null;
+  content: string;
+  attachmentUrl?: string | null;
+  readTime?: string;
+  published?: boolean;
+  createdAt: string;
+}
+
+export interface CourseAttendanceRecord {
+  id: number;
+  studentId: number;
+  courseId: number;
+  date: string; // YYYY-MM-DD
+  status: 'present' | 'absent' | 'late';
+  joinedAt?: string;
+}

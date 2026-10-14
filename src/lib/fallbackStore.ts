@@ -8,6 +8,12 @@ import {
   Message,
   HomeworkSubmission,
   CalendarSettings,
+  LessonComment,
+  Announcement,
+  RoleApplication,
+  ClassSurvey,
+  StudentArticle,
+  CourseAttendanceRecord,
 } from '../types.ts';
 
 const STORAGE_KEY = 'deen_hijrah_portal_store_v1';
@@ -21,6 +27,12 @@ interface PortalStoreState {
   enrollments: Enrollment[];
   messages: Message[];
   homework: HomeworkSubmission[];
+  comments?: LessonComment[];
+  announcements?: Announcement[];
+  roleApplications?: RoleApplication[];
+  classSurveys?: ClassSurvey[];
+  articles?: StudentArticle[];
+  attendance?: CourseAttendanceRecord[];
   media: Record<number, { id: number; fileName: string; mimeType: string; dataUrl: string }>;
   calendarSettings?: CalendarSettings;
 }
@@ -442,6 +454,44 @@ function createDefaultStoreState(): PortalStoreState {
     enrollments: [],
     messages: [],
     homework: [],
+    comments: [
+      {
+        id: 1,
+        lessonId: 1,
+        courseId: 1,
+        authorId: 2,
+        authorName: 'Ahmad Mansoor',
+        authorRole: 'student',
+        parentId: null,
+        content: 'Assalamu alaikum Ustadh, can you clarify the historical context of the boycott against Banu Hashim mentioned at the end of the recording?',
+        createdAt: new Date(Date.now() - 86400000).toISOString(),
+      },
+      {
+        id: 2,
+        lessonId: 1,
+        courseId: 1,
+        authorId: 1,
+        authorName: 'Ustadh Mustaqeem Shaikh',
+        authorRole: 'instructor',
+        parentId: 1,
+        content: 'Wa alaikum assalam wa rahmatullah Ahmad. Excellent question. The boycott lasted nearly three years in the Valley of Abu Talib (Shi’b Abi Talib). We will also examine the textual treaty parchment in our upcoming live session.',
+        createdAt: new Date(Date.now() - 43200000).toISOString(),
+      },
+    ],
+    announcements: [
+      {
+        id: 1,
+        courseId: 1,
+        instructorId: 1,
+        instructorName: 'Ustadh Mustaqeem Shaikh',
+        title: 'Welcome to Prophetic Seerah Cohort — Live Zoom Orientation Schedule',
+        content: 'Bismillah. Our live Zoom lecture recordings and interactive syllabus folios are now active. Please inspect Module 01 before our live seminar.',
+        priority: 'important',
+        createdAt: new Date(Date.now() - 172800000).toISOString(),
+      },
+    ],
+    roleApplications: [],
+    classSurveys: [],
     media: {},
     calendarSettings: defaultCalendarSettings,
   };
@@ -462,6 +512,10 @@ function loadStore(): PortalStoreState {
         enrollments: Array.isArray(parsed.enrollments) ? parsed.enrollments : defaults.enrollments,
         messages: Array.isArray(parsed.messages) ? parsed.messages : defaults.messages,
         homework: Array.isArray(parsed.homework) ? parsed.homework : defaults.homework,
+        comments: Array.isArray(parsed.comments) ? parsed.comments : defaults.comments,
+        announcements: Array.isArray(parsed.announcements) ? parsed.announcements : defaults.announcements,
+        roleApplications: Array.isArray(parsed.roleApplications) ? parsed.roleApplications : defaults.roleApplications,
+        classSurveys: Array.isArray(parsed.classSurveys) ? parsed.classSurveys : defaults.classSurveys,
         media: parsed.media || {},
         calendarSettings: parsed.calendarSettings || defaults.calendarSettings,
       };
@@ -519,6 +573,8 @@ export function syncServerPortalSnapshot(data: {
   profiles?: Profile[];
   enrollments?: Enrollment[];
   calendarSettings?: CalendarSettings;
+  announcements?: Announcement[];
+  roleApplications?: RoleApplication[];
 }) {
   const store = loadStore();
   if (data.calendarSettings) store.calendarSettings = data.calendarSettings;
@@ -526,6 +582,8 @@ export function syncServerPortalSnapshot(data: {
   if (Array.isArray(data.lessons) && data.lessons.length > 0) store.lessons = data.lessons;
   if (Array.isArray(data.events) && data.events.length > 0) store.events = data.events;
   if (Array.isArray(data.slides) && data.slides.length > 0) store.slides = data.slides;
+  if (Array.isArray(data.announcements)) store.announcements = data.announcements;
+  if (Array.isArray(data.roleApplications)) store.roleApplications = data.roleApplications;
   if (Array.isArray(data.profiles) && data.profiles.length > 0) {
     // Merge profiles so any locally created accounts remain available
     const byEmail = new Map<string, Profile>();
@@ -1449,6 +1507,181 @@ export async function handleLocalFallbackRequest(
     const fresh = createDefaultStoreState();
     saveStore(fresh);
     return jsonResponse({ success: true });
+  }
+
+  // 19. Lesson Comments
+  const commentsMatch = pathOnly.match(/^\/api\/lessons\/(\d+)\/comments$/);
+  if (commentsMatch) {
+    const lessonId = Number(commentsMatch[1]);
+    if (method === 'GET') {
+      const filtered = (store.comments || []).filter((c) => c.lessonId === lessonId);
+      return jsonResponse(filtered);
+    }
+    if (method === 'POST') {
+      if (!store.comments) store.comments = [];
+      const nextId = store.comments.reduce((max, c) => Math.max(max, c.id), 0) + 1;
+      const newComment: LessonComment = {
+        id: nextId,
+        lessonId,
+        courseId: Number(body.courseId) || 1,
+        authorId: Number(body.authorId) || 1,
+        authorName: String(body.authorName || 'Student'),
+        authorRole: body.authorRole || 'student',
+        authorAvatar: body.authorAvatar || null,
+        parentId: body.parentId ? Number(body.parentId) : null,
+        content: String(body.content || '').trim(),
+        createdAt: new Date().toISOString(),
+      };
+      store.comments.push(newComment);
+      saveStore(store);
+      return jsonResponse(newComment);
+    }
+  }
+
+  // 20. Announcements
+  if (pathOnly === '/api/announcements') {
+    if (method === 'GET') {
+      return jsonResponse(store.announcements || []);
+    }
+    if (method === 'POST') {
+      if (!store.announcements) store.announcements = [];
+      const nextId = store.announcements.reduce((max, a) => Math.max(max, a.id), 0) + 1;
+      const newAnnouncement: Announcement = {
+        id: nextId,
+        courseId: body.courseId ? Number(body.courseId) : null,
+        instructorId: Number(body.instructorId) || 1,
+        instructorName: String(body.instructorName || 'Ustadh Mustaqeem Shaikh'),
+        title: String(body.title || 'Announcement').trim(),
+        content: String(body.content || '').trim(),
+        priority: body.priority === 'important' ? 'important' : 'normal',
+        createdAt: new Date().toISOString(),
+      };
+      store.announcements.unshift(newAnnouncement);
+      saveStore(store);
+      return jsonResponse(newAnnouncement);
+    }
+  }
+
+  // 21. Role Applications
+  if (pathOnly === '/api/role-applications') {
+    if (method === 'GET') {
+      return jsonResponse(store.roleApplications || []);
+    }
+    if (method === 'POST') {
+      if (!store.roleApplications) store.roleApplications = [];
+      const nextId = store.roleApplications.reduce((max, a) => Math.max(max, a.id), 0) + 1;
+      const newApp: RoleApplication = {
+        id: nextId,
+        applicantId: Number(body.applicantId) || 1,
+        applicantName: String(body.applicantName || 'Applicant'),
+        applicantEmail: String(body.applicantEmail || '').trim().toLowerCase(),
+        requestedRole: body.requestedRole === 'admin' ? 'admin' : 'instructor',
+        reason: String(body.reason || '').trim(),
+        credentialsBio: body.credentialsBio ? String(body.credentialsBio).trim() : null,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+      store.roleApplications.unshift(newApp);
+      saveStore(store);
+      return jsonResponse(newApp);
+    }
+  }
+
+  const roleAppMatch = pathOnly.match(/^\/api\/role-applications\/(\d+)$/);
+  if (roleAppMatch && method === 'PUT') {
+    const appId = Number(roleAppMatch[1]);
+    const target = (store.roleApplications || []).find((a) => a.id === appId);
+    if (target) {
+      target.status = body.status === 'approved' ? 'approved' : 'rejected';
+      if (body.status === 'approved' && body.applicantId && body.requestedRole) {
+        const prof = store.profiles.find((p) => p.id === Number(body.applicantId));
+        if (prof) prof.role = body.requestedRole;
+      }
+      saveStore(store);
+      return jsonResponse(target);
+    }
+  }
+
+  // 22. Class Surveys
+  if (pathOnly === '/api/class-surveys') {
+    if (method === 'GET') {
+      return jsonResponse(store.classSurveys || []);
+    }
+    if (method === 'POST') {
+      if (!store.classSurveys) store.classSurveys = [];
+      const nextId = store.classSurveys.reduce((max, s) => Math.max(max, s.id), 0) + 1;
+      const survey: ClassSurvey = {
+        id: nextId,
+        courseId: Number(body.courseId) || 1,
+        lessonId: body.lessonId ? Number(body.lessonId) : null,
+        studentId: Number(body.studentId) || 1,
+        studentName: String(body.studentName || 'Student'),
+        instructorId: body.instructorId ? Number(body.instructorId) : null,
+        rating: body.rating === 'unsatisfactory' ? 'unsatisfactory' : 'satisfactory',
+        comment: body.comment ? String(body.comment).trim() : null,
+        createdAt: new Date().toISOString(),
+      };
+      store.classSurveys.unshift(survey);
+      saveStore(store);
+      return jsonResponse(survey);
+    }
+  }
+
+  // 23. Student Research Papers & Articles (Blogs)
+  if (pathOnly === '/api/articles') {
+    if (method === 'GET') {
+      return jsonResponse(store.articles || []);
+    }
+    if (method === 'POST') {
+      if (!store.articles) store.articles = [];
+      const currentProf = getOrCreateLocalProfile(
+        store,
+        identity?.uid || 'student-user',
+        identity?.email || 'student@deenhijrah.edu',
+        identity?.name
+      );
+      const nextId = store.articles.reduce((max, a) => Math.max(max, a.id), 0) + 1;
+      const article: StudentArticle = {
+        id: nextId,
+        studentId: currentProf.id,
+        authorName: currentProf.fullName,
+        authorEmail: currentProf.email,
+        authorRole: currentProf.role,
+        title: String(body.title || 'Untitled Article').trim(),
+        category: String(body.category || 'Islamic Studies').trim(),
+        abstract: body.abstract ? String(body.abstract).trim() : null,
+        content: String(body.content || '').trim(),
+        attachmentUrl: body.attachmentUrl ? String(body.attachmentUrl) : null,
+        readTime: String(body.readTime || '5 min read').trim(),
+        published: true,
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+      store.articles.unshift(article);
+      saveStore(store);
+      return jsonResponse(article);
+    }
+  }
+
+  const articleDeleteMatch = pathOnly.match(/^\/api\/articles\/(\d+)$/);
+  if (articleDeleteMatch && method === 'DELETE') {
+    const artId = Number(articleDeleteMatch[1]);
+    if (store.articles) {
+      store.articles = store.articles.filter((a) => a.id !== artId);
+      saveStore(store);
+    }
+    return jsonResponse({ success: true, id: artId });
+  }
+
+  // 24. Student Course Attendance
+  if (pathOnly === '/api/attendance') {
+    if (method === 'GET') {
+      const studentId = Number(new URL(url, 'http://localhost').searchParams.get('studentId'));
+      const courseId = Number(new URL(url, 'http://localhost').searchParams.get('courseId'));
+      const records = (store.attendance || []).filter(
+        (r) => (!studentId || r.studentId === studentId) && (!courseId || r.courseId === courseId)
+      );
+      return jsonResponse(records);
+    }
   }
 
   if (pathOnly === '/api/admin/save-state' && method === 'POST') {

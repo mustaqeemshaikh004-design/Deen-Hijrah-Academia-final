@@ -220,9 +220,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <>
-      {/* Strict 3-Zone Top Bar Contract */}
-      <header className="sticky top-0 z-40 flex items-center justify-between px-6 lg:px-10 py-4 academy-surface border-b backdrop-blur-md bg-opacity-95">
-        {/* Zone 1: Brand Emblem & Single text element wordmark */}
+      {/* Strict 3-Zone Top Bar Contract with Spacious Layout */}
+      <header className="sticky top-0 z-40 flex items-center justify-between px-6 sm:px-8 lg:px-12 xl:px-16 py-4 academy-surface border-b backdrop-blur-md bg-opacity-95">
+        {/* Zone 1: Brand Emblem & Regal Font Wordmark (Spaced generously away from Home) */}
         <a
           href="#top"
           onClick={(e) => {
@@ -233,14 +233,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             if (onReplayIntro) onReplayIntro();
           }}
           title="Deen Hijrah Academia (Double-click to replay logo intro)"
-          className="flex items-center gap-3 font-display text-lg lg:text-xl font-bold tracking-wider text-teal-400 hover:text-teal-300 transition-colors whitespace-nowrap shrink-0"
+          className="flex items-center gap-3.5 font-brand-emblem text-lg lg:text-xl font-bold tracking-wider text-teal-400 hover:text-teal-300 transition-colors whitespace-nowrap shrink-0 mr-6 sm:mr-8 lg:mr-12 xl:mr-16"
         >
           <AcademyLogo size="sm" />
-          <span>Deen Hijrah Academia</span>
+          <span className="font-brand-emblem tracking-wide bg-gradient-to-r from-teal-300 via-teal-200 to-amber-200 bg-clip-text text-transparent drop-shadow-sm">
+            Deen Hijrah Academia
+          </span>
         </a>
 
-        {/* Zone 2: Navigation links */}
-        <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+        {/* Zone 2: Navigation links with balanced centering and generous breathing room */}
+        <nav className="hidden md:flex items-center gap-5 lg:gap-7 xl:gap-8 text-sm font-medium px-2">
           <button
             type="button"
             onClick={() => onNavigate('home')}
@@ -338,8 +340,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           ) : null}
         </nav>
 
-        {/* Zone 3: 2 Primary Actions (Theme Mode Switcher + Create Account / Sign In Trigger) */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Zone 3: 2 Primary Actions (Theme Mode Switcher + Create Account / Sign In Trigger) safely spaced away from Enroll */}
+        <div className="flex items-center gap-3 shrink-0 ml-6 sm:ml-8 lg:ml-12 xl:ml-16">
           <button
             type="button"
             onClick={cycleTheme}
