@@ -1012,7 +1012,7 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                   Submit Course Homework &amp; Assignment
                 </h2>
                 <p className="text-xs academy-text-secondary">
-                  Submit your written assignment or upload your homework file directly to Ustadh{' '}
+                  Submit your written assignment or upload your homework file directly to instructor{' '}
                   {course.instructorName}.
                 </p>
 
@@ -1126,8 +1126,8 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                         onChange={(e) => setHwContent(e.target.value)}
                         placeholder={
                           hwAttachmentUrl
-                            ? 'Optional notes or questions for Ustadh regarding your attached document...'
-                            : 'Write your homework answer, textual analysis, or notes for Ustadh Mustaqeem Shaikh...'
+                            ? 'Optional notes or questions regarding your attached document...'
+                            : 'Write your homework answer, textual analysis, or notes for Mustaqeem Shaikh...'
                         }
                         className="w-full px-3 py-2 text-sm rounded-lg academy-elevated focus:outline-none focus:border-teal-400"
                       />
@@ -1153,7 +1153,7 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                       Student Submissions &amp; Faculty Feedback ({myCourseHomework.length})
                     </h3>
                     <p className="text-xs academy-text-secondary">
-                      View tutor comments, grade scores, and grade statuses from Ustadh{' '}
+                      View instructor comments, grade scores, and grade statuses from{' '}
                       {course.instructorName}.
                     </p>
                   </div>
@@ -1240,7 +1240,7 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                           <div className="pt-3 border-t academy-divider space-y-3">
                             <div className="flex items-center justify-between gap-2">
                               <div className="text-xs font-semibold text-teal-300">
-                                Faculty Feedback Section · Tutor: Ustadh {course.instructorName}
+                                Faculty Feedback Section · Instructor: {course.instructorName}
                               </div>
                               {!isAdmin && onGradeHomework && (
                                 <button
@@ -1271,7 +1271,7 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                               </div>
                             ) : (
                               <div className="p-3 rounded-lg academy-surface text-xs academy-text-muted">
-                                Awaiting tutor comment and grade evaluation from Ustadh{' '}
+                                Awaiting instructor comment and grade evaluation from{' '}
                                 {course.instructorName}.
                               </div>
                             )}
@@ -1573,7 +1573,7 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                     <span>Instructor Announcements ({courseAnnouncements.length})</span>
                   </div>
                   <span className="text-[11px] font-mono-tabular text-teal-400/80">
-                    Ustadh {course.instructorName}
+                    {course.instructorName}
                   </span>
                 </div>
                 <div className="space-y-2">
@@ -1676,7 +1676,7 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
                             Lecture Recording in Preparation
                           </h4>
                           <p className="text-xs academy-text-secondary max-w-md">
-                            Ustadh {course.instructorName} uploads the official high-definition lecture recording following the live class. Check back shortly or attend the upcoming live Zoom session.
+                            The instructor uploads the official high-definition lecture recording following the live class. Check back shortly or attend the upcoming live Zoom session.
                           </p>
                         </div>
                       ) : (

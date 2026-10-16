@@ -325,7 +325,7 @@ export const ZoomMeetingLauncherModal: React.FC<ZoomMeetingLauncherModalProps> =
                   </div>
 
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    Click the button below to join Ustadh {event.instructorName} in the live Zoom
+                    Click the button below to join {event.instructorName} in the live Zoom
                     majlis. Have your folios and notes ready.
                   </p>
 

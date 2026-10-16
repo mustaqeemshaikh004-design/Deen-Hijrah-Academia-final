@@ -147,8 +147,7 @@ function createDefaultStoreState(): PortalStoreState {
       mediaType: 'video',
       badgeText: 'Orientation Session',
       thumbnailUrl: 'preset:orientation',
-      videoUrl:
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+      videoUrl: '/uploads/hero-orientation.mp4',
       ctaText: 'View Orientation Schedule',
       ctaLink: '#calendar',
       instructorName: 'Mustaqeem Shaikh',
@@ -163,8 +162,7 @@ function createDefaultStoreState(): PortalStoreState {
       mediaType: 'video',
       badgeText: 'Featured Course',
       thumbnailUrl: 'preset:seerah',
-      videoUrl:
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      videoUrl: '/uploads/hero-seerah.mp4',
       ctaText: 'Explore Syllabus & Enroll',
       ctaLink: '#courses',
       instructorName: 'Mustaqeem Shaikh',
@@ -179,8 +177,7 @@ function createDefaultStoreState(): PortalStoreState {
       mediaType: 'video',
       badgeText: 'Orientation Session',
       thumbnailUrl: 'preset:arabic',
-      videoUrl:
-        'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+      videoUrl: '/uploads/hero-orientation.mp4',
       ctaText: 'Inspect Course Syllabus',
       ctaLink: '#courses',
       instructorName: 'Mustaqeem Shaikh',
@@ -197,7 +194,7 @@ function createDefaultStoreState(): PortalStoreState {
       description:
         'A structured deep-dive into the Prophetic biography, revelation timeline, and spiritual statecraft from primary classical sources.',
       longDescription:
-        'Designed and taught by Ustadh Mustaqeem Shaikh, this flagship program takes students beyond surface-level storytelling into the socio-political, spiritual, and jurisprudential dimensions of the Seerah. Includes weekly live Zoom seminars, downloadable research folios, homework assignments, and interactive milestone tracking.',
+        'Designed and taught by Mustaqeem Shaikh, this flagship program takes students beyond surface-level storytelling into the socio-political, spiritual, and jurisprudential dimensions of the Seerah. Includes weekly live Zoom seminars, downloadable research folios, homework assignments, and interactive milestone tracking.',
       thumbnailUrl: 'preset:seerah',
       category: 'Seerah & History',
       price: 'Free',
@@ -212,7 +209,7 @@ function createDefaultStoreState(): PortalStoreState {
       classStartTime: '14:00',
       classTimezone: 'America/New_York',
       syllabusText:
-        'Academic Expectations: Students attend two weekly live Zoom classes (automatically displayed in your local country timezone), complete the primary source readings, and submit module homework assignments for faculty review by Ustadh Mustaqeem Shaikh.',
+        'Academic Expectations: Students attend two weekly live Zoom classes (automatically displayed in your local country timezone), complete the primary source readings, and submit module homework assignments for faculty review by Mustaqeem Shaikh.',
       syllabusBoxes: SEERAH_SYLLABUS_BOXES,
       syllabusFileUrl: null,
       enrollmentStatus: 'open',
@@ -285,7 +282,7 @@ function createDefaultStoreState(): PortalStoreState {
       courseId: 1,
       title: 'Orientation Recording: Seerah Syllabus, Methodology & Study Guide',
       description:
-        'Publicly viewable Orientation Recording by Ustadh Mustaqeem Shaikh introducing the Seerah curriculum, primary sources, and weekly Zoom seminar expectations.',
+        'Publicly viewable Orientation Recording by Mustaqeem Shaikh introducing the Seerah curriculum, primary sources, and weekly Zoom seminar expectations.',
       videoUrl:
         'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
       thumbnailUrl: 'preset:orientation',
@@ -463,7 +460,7 @@ function createDefaultStoreState(): PortalStoreState {
         authorName: 'Ahmad Mansoor',
         authorRole: 'student',
         parentId: null,
-        content: 'Assalamu alaikum Ustadh, can you clarify the historical context of the boycott against Banu Hashim mentioned at the end of the recording?',
+        content: 'Assalamu alaikum, can you clarify the historical context of the boycott against Banu Hashim mentioned at the end of the recording?',
         createdAt: new Date(Date.now() - 86400000).toISOString(),
       },
       {
@@ -471,7 +468,7 @@ function createDefaultStoreState(): PortalStoreState {
         lessonId: 1,
         courseId: 1,
         authorId: 1,
-        authorName: 'Ustadh Mustaqeem Shaikh',
+        authorName: 'Mustaqeem Shaikh',
         authorRole: 'instructor',
         parentId: 1,
         content: 'Wa alaikum assalam wa rahmatullah Ahmad. Excellent question. The boycott lasted nearly three years in the Valley of Abu Talib (Shi’b Abi Talib). We will also examine the textual treaty parchment in our upcoming live session.',
@@ -483,7 +480,7 @@ function createDefaultStoreState(): PortalStoreState {
         id: 1,
         courseId: 1,
         instructorId: 1,
-        instructorName: 'Ustadh Mustaqeem Shaikh',
+        instructorName: 'Mustaqeem Shaikh',
         title: 'Welcome to Prophetic Seerah Cohort — Live Zoom Orientation Schedule',
         content: 'Bismillah. Our live Zoom lecture recordings and interactive syllabus folios are now active. Please inspect Module 01 before our live seminar.',
         priority: 'important',
@@ -508,7 +505,17 @@ function loadStore(): PortalStoreState {
         courses: Array.isArray(parsed.courses) ? parsed.courses : defaults.courses,
         lessons: Array.isArray(parsed.lessons) ? parsed.lessons : defaults.lessons,
         events: Array.isArray(parsed.events) ? parsed.events : defaults.events,
-        slides: Array.isArray(parsed.slides) ? parsed.slides : defaults.slides,
+        slides: Array.isArray(parsed.slides)
+          ? parsed.slides.map((s) => ({
+              ...s,
+              videoUrl:
+                s.videoUrl && s.videoUrl.includes('commondatastorage.googleapis.com')
+                  ? s.id === 2 || String(s.title).toLowerCase().includes('seerah')
+                    ? '/uploads/hero-seerah.mp4'
+                    : '/uploads/hero-orientation.mp4'
+                  : s.videoUrl || '/uploads/hero-orientation.mp4',
+            }))
+          : defaults.slides,
         enrollments: Array.isArray(parsed.enrollments) ? parsed.enrollments : defaults.enrollments,
         messages: Array.isArray(parsed.messages) ? parsed.messages : defaults.messages,
         homework: Array.isArray(parsed.homework) ? parsed.homework : defaults.homework,
@@ -581,7 +588,17 @@ export function syncServerPortalSnapshot(data: {
   if (Array.isArray(data.courses) && data.courses.length > 0) store.courses = data.courses;
   if (Array.isArray(data.lessons) && data.lessons.length > 0) store.lessons = data.lessons;
   if (Array.isArray(data.events) && data.events.length > 0) store.events = data.events;
-  if (Array.isArray(data.slides) && data.slides.length > 0) store.slides = data.slides;
+  if (Array.isArray(data.slides) && data.slides.length > 0) {
+    store.slides = data.slides.map((s) => ({
+      ...s,
+      videoUrl:
+        s.videoUrl && s.videoUrl.includes('commondatastorage.googleapis.com')
+          ? s.id === 2 || String(s.title).toLowerCase().includes('seerah')
+            ? '/uploads/hero-seerah.mp4'
+            : '/uploads/hero-orientation.mp4'
+          : s.videoUrl || '/uploads/hero-orientation.mp4',
+    }));
+  }
   if (Array.isArray(data.announcements)) store.announcements = data.announcements;
   if (Array.isArray(data.roleApplications)) store.roleApplications = data.roleApplications;
   if (Array.isArray(data.profiles) && data.profiles.length > 0) {
@@ -775,6 +792,8 @@ export async function handleLocalFallbackRequest(
       slides: store.slides,
       profiles: sanitizedProfiles,
       enrollments: store.enrollments,
+      announcements: store.announcements || [],
+      roleApplications: store.roleApplications || [],
       calendarSettings: store.calendarSettings || createDefaultStoreState().calendarSettings,
     });
   }
@@ -1023,7 +1042,7 @@ export async function handleLocalFallbackRequest(
         senderId: teacherProfile.id,
         receiverId: founder.id,
         subject: `[FACULTY_APPLICATION] ${teacherProfile.fullName} — Course: ${assignedCourse.title}`,
-        body: `Assalamu alaykum Ustadh Mustaqeem Shaikh,\n\n${teacherProfile.fullName} (${cleanEmail}) has joined the faculty as the Course Teacher for "${assignedCourse.title}".\n• Country & Timezone: ${country} (${timezone})\n• Class Schedule: ${body.classDays || 'Sun & Thu'} at ${body.classStartTime || '15:00'}\n• Qualifications / Bio: ${body.credentialsBio || 'Provided'}`,
+        body: `Assalamu alaykum Mustaqeem Shaikh,\n\n${teacherProfile.fullName} (${cleanEmail}) has joined the faculty as the Course Teacher for "${assignedCourse.title}".\n• Country & Timezone: ${country} (${timezone})\n• Class Schedule: ${body.classDays || 'Sun & Thu'} at ${body.classStartTime || '15:00'}\n• Qualifications / Bio: ${body.credentialsBio || 'Provided'}`,
         readStatus: false,
         createdAt: new Date().toISOString(),
       });
@@ -1550,7 +1569,7 @@ export async function handleLocalFallbackRequest(
         id: nextId,
         courseId: body.courseId ? Number(body.courseId) : null,
         instructorId: Number(body.instructorId) || 1,
-        instructorName: String(body.instructorName || 'Ustadh Mustaqeem Shaikh'),
+        instructorName: String(body.instructorName || 'Mustaqeem Shaikh'),
         title: String(body.title || 'Announcement').trim(),
         content: String(body.content || '').trim(),
         priority: body.priority === 'important' ? 'important' : 'normal',

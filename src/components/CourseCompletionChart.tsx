@@ -260,7 +260,7 @@ export const CourseCompletionChart: React.FC<CourseCompletionChartProps> = ({
                           {item.totalLessons} Modules)
                         </div>
                         <div className="text-[11px] academy-text-secondary">
-                          Instructor: Ustadh {item.instructorName} ·{' '}
+                          Instructor: {item.instructorName} ·{' '}
                           {item.isEnrolled ? 'Enrolled' : 'Not Enrolled'}
                         </div>
                       </div>

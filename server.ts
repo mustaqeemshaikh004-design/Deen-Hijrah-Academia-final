@@ -247,7 +247,15 @@ app.get('/api/portal-data', async (_req, res) => {
       courses: coursesList.map(formatCourseWithTags),
       lessons: lessonsList,
       events: eventsList,
-      slides: slidesList,
+      slides: slidesList.map((s) => ({
+        ...s,
+        videoUrl:
+          s.videoUrl && s.videoUrl.includes('commondatastorage.googleapis.com')
+            ? s.id === 2 || String(s.title).toLowerCase().includes('seerah')
+              ? '/uploads/hero-seerah.mp4'
+              : '/uploads/hero-orientation.mp4'
+            : s.videoUrl || '/uploads/hero-orientation.mp4',
+      })),
       profiles: sanitizedProfiles,
       enrollments: enrollmentsList,
       announcements: announcementsList,
@@ -524,7 +532,7 @@ app.post('/api/faculty/join', async (req, res) => {
         senderId: teacherProfile.id,
         receiverId: founder.id,
         subject: `[FACULTY_APPLICATION] ${teacherProfile.fullName} — Course: ${assignedCourse.title}`,
-        body: `Assalamu alaykum Ustadh Mustaqeem Shaikh,\n\n${teacherProfile.fullName} (${cleanEmail}) has joined the faculty as the Course Teacher for "${assignedCourse.title}".\n• Country & Timezone: ${country || 'N/A'} (${timezone || 'America/New_York'})\n• Class Schedule: ${classDays || 'Sun & Thu'} at ${classStartTime || '15:00'}\n• Qualifications / Bio: ${credentialsBio || 'Provided'}\n• Resume / CV: ${resumeUrl ? 'Uploaded / Attached' : 'Included in bio'}`,
+        body: `Assalamu alaykum Mustaqeem Shaikh,\n\n${teacherProfile.fullName} (${cleanEmail}) has joined the faculty as the Course Teacher for "${assignedCourse.title}".\n• Country & Timezone: ${country || 'N/A'} (${timezone || 'America/New_York'})\n• Class Schedule: ${classDays || 'Sun & Thu'} at ${classStartTime || '15:00'}\n• Qualifications / Bio: ${credentialsBio || 'Provided'}\n• Resume / CV: ${resumeUrl ? 'Uploaded / Attached' : 'Included in bio'}`,
         readStatus: false,
       });
     }
@@ -981,7 +989,7 @@ app.post('/api/announcements', requireAuth, async (req: AuthRequest, res) => {
     const created = await createAnnouncement({
       courseId: courseId ? Number(courseId) : null,
       instructorId: profile.id,
-      instructorName: instructorName || profile.fullName || 'Ustadh Mustaqeem Shaikh',
+      instructorName: instructorName || profile.fullName || 'Mustaqeem Shaikh',
       title: String(title).trim(),
       content: String(content).trim(),
       priority: priority === 'important' ? 'important' : 'normal',
@@ -1354,7 +1362,7 @@ app.put('/api/admin/courses/:id', requireAuth, requireAdmin, async (req: AuthReq
     if (!canManage) {
       return res.status(403).json({
         error:
-          'Forbidden: As a course teacher, you can only modify the courses you teach. Full Admin access belongs exclusively to Ustadh Mustaqeem Shaikh.',
+          'Forbidden: As a course teacher, you can only modify the courses you teach. Full Admin access belongs exclusively to Mustaqeem Shaikh.',
       });
     }
     const bodyData = { ...req.body };

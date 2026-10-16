@@ -160,7 +160,7 @@ export async function ensureInitialAcademySetup(forceReseed = false) {
         mediaType: 'video',
         badgeText: 'Orientation Session',
         thumbnailUrl: 'preset:orientation',
-        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+        videoUrl: '/uploads/hero-orientation.mp4',
         ctaText: 'View Orientation Schedule',
         ctaLink: '#calendar',
         instructorName: 'Mustaqeem Shaikh',
@@ -173,7 +173,7 @@ export async function ensureInitialAcademySetup(forceReseed = false) {
         mediaType: 'video',
         badgeText: 'Featured Course',
         thumbnailUrl: 'preset:seerah',
-        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+        videoUrl: '/uploads/hero-seerah.mp4',
         ctaText: 'Explore Syllabus & Enroll',
         ctaLink: '#courses',
         instructorName: 'Mustaqeem Shaikh',
@@ -186,7 +186,7 @@ export async function ensureInitialAcademySetup(forceReseed = false) {
         mediaType: 'video',
         badgeText: 'Orientation Session',
         thumbnailUrl: 'preset:arabic',
-        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+        videoUrl: '/uploads/hero-orientation.mp4',
         ctaText: 'Inspect Course Syllabus',
         ctaLink: '#courses',
         instructorName: 'Mustaqeem Shaikh',
@@ -204,7 +204,7 @@ export async function ensureInitialAcademySetup(forceReseed = false) {
           description:
             'A structured deep-dive into the Prophetic biography, revelation timeline, and spiritual statecraft from primary classical sources.',
           longDescription:
-            'Designed and taught by Ustadh Mustaqeem Shaikh, this flagship program takes students beyond surface-level storytelling into the socio-political, spiritual, and jurisprudential dimensions of the Seerah. Includes weekly live Zoom seminars, downloadable research folios, homework assignments, and interactive milestone tracking.',
+            'Designed and taught by Mustaqeem Shaikh, this flagship program takes students beyond surface-level storytelling into the socio-political, spiritual, and jurisprudential dimensions of the Seerah. Includes weekly live Zoom seminars, downloadable research folios, homework assignments, and interactive milestone tracking.',
           thumbnailUrl: 'preset:seerah',
           category: 'Seerah & History',
           price: 'Free',
@@ -219,7 +219,7 @@ export async function ensureInitialAcademySetup(forceReseed = false) {
           classStartTime: '14:00',
           classTimezone: 'America/New_York',
           syllabusText:
-            'Academic Expectations: Students attend two weekly live Zoom classes (automatically displayed in your local country timezone), complete the primary source readings, and submit module homework assignments for faculty review by Ustadh Mustaqeem Shaikh.',
+            'Academic Expectations: Students attend two weekly live Zoom classes (automatically displayed in your local country timezone), complete the primary source readings, and submit module homework assignments for faculty review by Mustaqeem Shaikh.',
           syllabusBoxes: SEERAH_SYLLABUS_BOXES,
           enrollmentStatus: 'open::tags:["Open for Enrollment","Live Cohort","Orientations Free","Flagship Program"]',
         },
@@ -286,7 +286,7 @@ export async function ensureInitialAcademySetup(forceReseed = false) {
         courseId: seerahCourse.id,
         title: 'Orientation Recording: Seerah Syllabus, Methodology & Study Guide',
         description:
-          'Publicly viewable Orientation Recording by Ustadh Mustaqeem Shaikh introducing the Seerah curriculum, primary sources, and weekly Zoom seminar expectations.',
+          'Publicly viewable Orientation Recording by Mustaqeem Shaikh introducing the Seerah curriculum, primary sources, and weekly Zoom seminar expectations.',
         videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
         thumbnailUrl: 'preset:orientation',
         duration: '28:15',

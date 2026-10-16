@@ -73,14 +73,18 @@ export function convertClassTimeToRegion(
   const originTz = sourceTz || 'America/New_York';
   const { hours, minutes } = parseTimeHoursMinutes(rawTime);
 
-  // Use provided date or today's date
+  // Use provided date (supports both YYYY-MM-DD and ISO timestamps) or today's date
   const today = new Date();
-  const baseDateStr =
-    dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
-      ? dateStr
-      : `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
-          today.getDate()
-        ).padStart(2, '0')}`;
+  let baseDateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
+    today.getDate()
+  ).padStart(2, '0')}`;
+
+  if (dateStr) {
+    const match = String(dateStr).match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) {
+      baseDateStr = match[1];
+    }
+  }
 
   const [y, m, d] = baseDateStr.split('-').map(Number);
 

@@ -41,11 +41,16 @@ export const InfiniteCourseMarquee: React.FC<InfiniteCourseMarqueeProps> = ({
 
   // Filter courses that are published or coming soon or open for enrollment
   const visibleCourses = useMemo(() => {
-    let list = courses.filter((c) => c.status === 'published' || c.enrollmentStatus);
+    let list = courses.filter((c) => {
+      const isComingSoon = c.enrollmentStatus === 'coming_soon' || (c as any).status === 'coming_soon';
+      const isOpenEnrollment = c.enrollmentStatus === 'open' || !c.enrollmentStatus;
+      const isLive = c.enrollmentStatus === 'live';
+      return c.status === 'published' || isComingSoon || isOpenEnrollment || isLive;
+    });
     if (statusFilter === 'open') {
-      list = list.filter((c) => c.enrollmentStatus === 'open' || !c.enrollmentStatus);
+      list = list.filter((c) => c.enrollmentStatus === 'open' || (!c.enrollmentStatus && c.status === 'published'));
     } else if (statusFilter === 'coming_soon') {
-      list = list.filter((c) => c.enrollmentStatus === 'coming_soon');
+      list = list.filter((c) => c.enrollmentStatus === 'coming_soon' || (c as any).status === 'coming_soon');
     } else if (statusFilter === 'live') {
       list = list.filter((c) => c.enrollmentStatus === 'live');
     }
@@ -66,7 +71,7 @@ export const InfiniteCourseMarquee: React.FC<InfiniteCourseMarqueeProps> = ({
 
   const handleScrollManual = (direction: 'left' | 'right') => {
     if (!scrollContainerRef.current) return;
-    const amount = direction === 'left' ? -380 : 380;
+    const amount = direction === 'left' ? -260 : 260;
     scrollContainerRef.current.scrollBy({ left: amount, behavior: 'smooth' });
   };
 
@@ -75,42 +80,42 @@ export const InfiniteCourseMarquee: React.FC<InfiniteCourseMarqueeProps> = ({
   }
 
   return (
-    <section className="relative w-full overflow-hidden border-y border-teal-500/20 bg-gradient-to-b from-[#050C17] via-[#081528] to-[#050C17] py-8 lg:py-12 select-none">
+    <section className="relative w-full overflow-hidden border-y border-teal-500/20 bg-gradient-to-b from-[#050C17] via-[#081528] to-[#050C17] py-6 select-none">
       {/* Decorative ambient glowing backdrops */}
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-0 left-1/4 w-80 h-80 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header Bar with Stream Title, Filters, and Navigation Controls */}
-      <div className="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 mb-6">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-4 border-b academy-divider">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-teal-400">
+      <div className="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 mb-4">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 pb-3 border-b academy-divider">
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-teal-400">
               <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-              <span>Continuous Curriculum Showcase · Source Code Stream</span>
+              <span>Sacred Knowledge Programs in Motion</span>
             </div>
-            <h2 className="font-display text-xl sm:text-2xl lg:text-3xl font-bold text-white">
-              Sacred Knowledge Programs in Motion
+            <h2 className="font-display text-lg sm:text-xl font-bold text-white">
+              Continuous Curriculum Showcase
             </h2>
-            <p className="text-xs academy-text-secondary max-w-2xl">
-              Browse live cohorts, open enrollments, and upcoming academic programs. Class times automatically convert to your local region ({detectedTz}).
+            <p className="text-[11px] academy-text-secondary max-w-xl">
+              Live cohorts, open enrollments, and upcoming academic programs. Class times convert to your local region ({detectedTz}).
             </p>
           </div>
 
           {/* Filter Pills & Interactive Stream Controls */}
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Status Pills */}
-            <div className="flex items-center gap-1 p-1 rounded-xl academy-elevated border border-teal-500/20">
+            <div className="flex items-center gap-1 p-0.5 rounded-lg academy-elevated border border-teal-500/20">
               {[
-                { key: 'all', label: 'All Programs' },
-                { key: 'open', label: '🟢 Open for Enrollment' },
-                { key: 'live', label: '🔴 Live Cohorts' },
+                { key: 'all', label: 'All' },
+                { key: 'open', label: '🟢 Open' },
+                { key: 'live', label: '🔴 Live' },
                 { key: 'coming_soon', label: '🟡 Coming Soon' },
               ].map((pill) => (
                 <button
                   key={pill.key}
                   type="button"
                   onClick={() => setStatusFilter(pill.key as any)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
                     statusFilter === pill.key
                       ? 'bg-teal-400 text-slate-950 shadow-md font-bold'
                       : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -122,30 +127,30 @@ export const InfiniteCourseMarquee: React.FC<InfiniteCourseMarqueeProps> = ({
             </div>
 
             {/* Play/Pause & Scroll buttons */}
-            <div className="flex items-center gap-1.5 academy-elevated p-1 rounded-xl border border-teal-500/20">
+            <div className="flex items-center gap-1 academy-elevated p-0.5 rounded-lg border border-teal-500/20">
               <button
                 type="button"
                 onClick={() => setIsPaused(!isPaused)}
-                className="p-1.5 rounded-lg text-slate-300 hover:text-teal-300 hover:bg-white/5 transition-colors cursor-pointer"
+                className="p-1 rounded-md text-slate-300 hover:text-teal-300 hover:bg-white/5 transition-colors cursor-pointer"
                 title={isPaused ? 'Resume Infinite Scroll' : 'Pause Infinite Scroll'}
               >
-                {isPaused ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4" />}
+                {isPaused ? <Play className="w-3.5 h-3.5 fill-current" /> : <Pause className="w-3.5 h-3.5" />}
               </button>
               <button
                 type="button"
                 onClick={() => handleScrollManual('left')}
-                className="p-1.5 rounded-lg text-slate-300 hover:text-teal-300 hover:bg-white/5 transition-colors cursor-pointer"
+                className="p-1 rounded-md text-slate-300 hover:text-teal-300 hover:bg-white/5 transition-colors cursor-pointer"
                 title="Scroll Left"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
                 onClick={() => handleScrollManual('right')}
-                className="p-1.5 rounded-lg text-slate-300 hover:text-teal-300 hover:bg-white/5 transition-colors cursor-pointer"
+                className="p-1 rounded-md text-slate-300 hover:text-teal-300 hover:bg-white/5 transition-colors cursor-pointer"
                 title="Scroll Right"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -160,11 +165,11 @@ export const InfiniteCourseMarquee: React.FC<InfiniteCourseMarqueeProps> = ({
         onMouseLeave={() => setIsPaused(false)}
       >
         <div
-          className={`flex gap-6 w-max py-2 ${
+          className={`flex gap-4 w-max py-1 ${
             isPaused ? '' : 'animate-marquee-infinite'
           }`}
           style={{
-            animationDuration: `${Math.max(30, marqueeItems.length * 5)}s`,
+            animationDuration: `${Math.max(25, marqueeItems.length * 4)}s`,
           }}
         >
           {marqueeItems.map((course, idx) => {
@@ -188,18 +193,17 @@ export const InfiniteCourseMarquee: React.FC<InfiniteCourseMarqueeProps> = ({
 
             const isComingSoon = course.enrollmentStatus === 'coming_soon';
             const isLive = course.enrollmentStatus === 'live';
-            const isOpen = !isComingSoon && !isLive;
 
             return (
               <div
                 key={`marquee-${course.id}-${idx}`}
-                className="w-[340px] sm:w-[380px] shrink-0 rounded-2xl overflow-hidden academy-surface border border-slate-800 hover:border-teal-400/50 transition-all duration-300 flex flex-col justify-between group shadow-xl hover:shadow-2xl hover:-translate-y-1 bg-[#061224]/90 backdrop-blur-md"
+                className="w-[230px] sm:w-[250px] shrink-0 rounded-xl overflow-hidden academy-surface border border-slate-800/80 hover:border-teal-400/50 transition-all duration-300 flex flex-col justify-between group shadow-lg hover:shadow-xl hover:-translate-y-0.5 bg-[#061224]/95 backdrop-blur-md"
               >
                 <div>
-                  {/* Thumbnail with overlay badges */}
+                  {/* Compact Thumbnail with overlay badges */}
                   <div
                     onClick={() => onViewCourseDetails(course)}
-                    className="relative h-44 overflow-hidden bg-slate-950 cursor-pointer"
+                    className="relative h-28 sm:h-32 overflow-hidden bg-slate-950 cursor-pointer"
                   >
                     <img
                       src={resolveThumbnailUrl(course.thumbnailUrl)}
@@ -208,14 +212,14 @@ export const InfiniteCourseMarquee: React.FC<InfiniteCourseMarqueeProps> = ({
                       onError={(e) => {
                         (e.currentTarget as HTMLImageElement).src = ACADEMY_ASSETS.courseSeerah;
                       }}
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#061224] via-[#061224]/30 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#061224] via-[#061224]/20 to-transparent" />
 
                     {/* Status Badge */}
-                    <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                    <div className="absolute top-2 left-2 flex items-center gap-1">
                       <span
-                        className={`px-2.5 py-1 rounded-full text-[11px] font-bold tracking-wide flex items-center gap-1.5 shadow-lg backdrop-blur-md ${
+                        className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold tracking-wide flex items-center gap-1 shadow-md backdrop-blur-md ${
                           isLive
                             ? 'bg-rose-500/90 text-white'
                             : isComingSoon
@@ -226,66 +230,65 @@ export const InfiniteCourseMarquee: React.FC<InfiniteCourseMarqueeProps> = ({
                         <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                         <span>
                           {isLive
-                            ? 'Live Cohort'
+                            ? 'Live'
                             : isComingSoon
                             ? 'Coming Soon'
-                            : 'Open for Enrollment'}
+                            : 'Open'}
                         </span>
                       </span>
                     </div>
 
-                    <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-xs text-teal-300 font-mono-tabular">
-                      <span className="bg-slate-950/70 px-2 py-0.5 rounded backdrop-blur-sm border border-slate-800">
+                    <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between text-[10px] text-teal-300 font-mono-tabular">
+                      <span className="bg-slate-950/80 px-1.5 py-0.5 rounded backdrop-blur-sm border border-slate-800">
                         {course.duration}
                       </span>
-                      <span className="bg-slate-950/70 px-2 py-0.5 rounded font-bold text-white backdrop-blur-sm border border-slate-800">
+                      <span className="bg-slate-950/80 px-1.5 py-0.5 rounded font-bold text-white backdrop-blur-sm border border-slate-800">
                         {course.price || 'Free'}
                       </span>
                     </div>
                   </div>
 
-                  {/* Body Content */}
-                  <div className="p-5 space-y-3">
-                    <div className="flex items-center justify-between text-xs text-teal-400 font-medium">
-                      <span>{course.category}</span>
-                      <span className="text-slate-400 truncate max-w-[150px]">
-                        Faculty: {course.instructorName}
+                  {/* Body Content - Sleek & Compact */}
+                  <div className="p-3 space-y-2">
+                    <div className="flex items-center justify-between text-[10px] text-teal-400 font-medium">
+                      <span className="truncate max-w-[100px]">{course.category}</span>
+                      <span className="text-slate-400 truncate max-w-[100px]">
+                        {course.instructorName}
                       </span>
                     </div>
 
                     <h3
                       onClick={() => onViewCourseDetails(course)}
-                      className="font-display text-lg font-bold text-white hover:text-teal-300 transition-colors cursor-pointer line-clamp-1"
+                      className="font-display text-xs sm:text-sm font-bold text-white hover:text-teal-300 transition-colors cursor-pointer line-clamp-1"
+                      title={course.title}
                     >
                       {course.title}
                     </h3>
 
-                    <p className="text-xs academy-text-secondary line-clamp-2 leading-relaxed">
+                    <p className="text-[10.5px] academy-text-secondary line-clamp-1 leading-normal">
                       {course.description}
                     </p>
 
                     {/* Converted Local Timezone Schedule */}
-                    <div className="flex items-center gap-1.5 text-[11px] text-teal-300 font-mono-tabular bg-teal-950/30 px-2.5 py-1.5 rounded-lg border border-teal-500/20">
-                      <Globe className="w-3.5 h-3.5 shrink-0 text-teal-400" />
+                    <div className="flex items-center gap-1 text-[9.5px] text-teal-300 font-mono-tabular bg-teal-950/30 px-2 py-1 rounded border border-teal-500/20">
+                      <Globe className="w-3 h-3 shrink-0 text-teal-400" />
                       <span className="truncate">
                         {course.classDays || 'Sat & Wed'} · {convertedClassTime.formattedLocalTime}
                       </span>
                     </div>
 
                     {/* Student Capacity Progress Bar */}
-                    <div className="space-y-1 text-xs font-mono-tabular">
-                      <div className="flex items-center justify-between text-[11px]">
+                    <div className="space-y-1 text-[9.5px] font-mono-tabular">
+                      <div className="flex items-center justify-between">
                         <span className="flex items-center gap-1 academy-text-secondary">
-                          <Users className="w-3 h-3 text-teal-400" />
-                          <span>
-                            {studentsTaken}/{maxStudents} Students
-                          </span>
+                          <Users className="w-2.5 h-2.5 text-teal-400" />
+                          <span>{studentsTaken}/{maxStudents}</span>
                         </span>
                         <span className={isCourseFull ? 'text-rose-400 font-bold' : 'text-teal-400'}>
-                          {enrollmentRate}% Enrolled
+                          {enrollmentRate}%
                         </span>
                       </div>
-                      <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                      <div className="w-full h-1 rounded-full bg-slate-800 overflow-hidden">
                         <div
                           className={`h-full transition-all duration-500 ${
                             isCourseFull ? 'bg-rose-500' : 'bg-teal-400'
@@ -298,24 +301,24 @@ export const InfiniteCourseMarquee: React.FC<InfiniteCourseMarqueeProps> = ({
                 </div>
 
                 {/* Footer Buttons */}
-                <div className="p-5 pt-0 space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
+                <div className="p-3 pt-0 space-y-1.5">
+                  <div className="grid grid-cols-2 gap-1.5">
                     <button
                       type="button"
                       onClick={() => onWatchCourse(course)}
-                      className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all cursor-pointer whitespace-nowrap"
+                      className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all cursor-pointer whitespace-nowrap"
                     >
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                      <span>Recordings ({courseLessons.length})</span>
+                      <Play className="w-3 h-3 fill-current" />
+                      <span>Watch ({courseLessons.length})</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => onViewCourseDetails(course)}
-                      className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold academy-elevated hover:border-teal-400 text-teal-300 transition-all cursor-pointer whitespace-nowrap"
+                      className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-[10px] font-semibold academy-elevated hover:border-teal-400 text-teal-300 transition-all cursor-pointer whitespace-nowrap"
                     >
-                      <BookOpen className="w-3.5 h-3.5" />
-                      <span>View Details</span>
+                      <BookOpen className="w-3 h-3" />
+                      <span>Details</span>
                     </button>
                   </div>
 
@@ -323,10 +326,10 @@ export const InfiniteCourseMarquee: React.FC<InfiniteCourseMarqueeProps> = ({
                     <button
                       type="button"
                       onClick={() => onEnrollCourse(course)}
-                      className="w-full flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl text-xs font-bold bg-teal-400 text-slate-950 hover:bg-teal-300 shadow-md transition-all cursor-pointer"
+                      className="w-full flex items-center justify-center gap-1 py-1.5 px-2.5 rounded-lg text-[10.5px] font-bold bg-teal-400 text-slate-950 hover:bg-teal-300 shadow transition-all cursor-pointer"
                     >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Enroll in Course ({course.price || 'Free'})</span>
+                      <Sparkles className="w-3 h-3" />
+                      <span>Enroll ({course.price || 'Free'})</span>
                     </button>
                   )}
                 </div>

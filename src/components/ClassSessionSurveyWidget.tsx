@@ -47,7 +47,7 @@ export const ClassSessionSurveyWidget: React.FC<ClassSessionSurveyWidgetProps> =
             JazakAllahu Khayran for your session feedback!
           </h4>
           <p className="text-[11px] academy-text-secondary">
-            Your rating has been delivered to Ustadh {instructorName} to continually elevate student learning.
+            Your rating has been delivered to instructor {instructorName} to continually elevate student learning.
           </p>
         </div>
       </div>
@@ -64,7 +64,7 @@ export const ClassSessionSurveyWidget: React.FC<ClassSessionSurveyWidgetProps> =
           </h4>
         </div>
         <span className="text-[11px] text-teal-400/80 font-mono-tabular">
-          Ustadh {instructorName} · {lessonTitle || courseTitle}
+          {instructorName} · {lessonTitle || courseTitle}
         </span>
       </div>
 

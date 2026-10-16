@@ -100,12 +100,12 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
 
   // Auto-cycle through slides when enabled (pauses when user interacts or video is unmuted/playing)
   useEffect(() => {
-    if (!isAutoPlaying || activeSlides.length <= 1) return;
+    if (!isAutoPlaying || activeSlides.length <= 1 || (!isMuted && hasBackgroundVideo)) return;
     const timer = setInterval(() => {
       setActiveIndex((prev) => (prev + 1) % activeSlides.length);
     }, 10000);
     return () => clearInterval(timer);
-  }, [isAutoPlaying, activeSlides.length]);
+  }, [isAutoPlaying, activeSlides.length, isMuted, hasBackgroundVideo]);
 
   // Sync video audio and playback
   useEffect(() => {
@@ -123,7 +123,7 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
     }
   }, [activeIndex, isMuted, volume, currentSlide?.videoUrl]);
 
-  // Toggle Mute / Voice Audio with persistence
+  // Toggle Mute / Video Audio with persistence
   const toggleMute = useCallback(() => {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
@@ -134,8 +134,20 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
     if (bgVideoRef.current) {
       bgVideoRef.current.muted = nextMuted;
       if (!nextMuted) {
-        bgVideoRef.current.volume = volume;
-        bgVideoRef.current.play().catch(() => {});
+        const effectiveVol = volume > 0 ? volume : 1.0;
+        bgVideoRef.current.volume = effectiveVol;
+        if (volume === 0) {
+          setVolume(1.0);
+          try {
+            localStorage.setItem(STORAGE_KEYS.volume, '1.0');
+          } catch {}
+        }
+        bgVideoRef.current
+          .play()
+          .then(() => setIsVideoPlaying(true))
+          .catch((err) => {
+            console.warn('Playback audio start:', err);
+          });
       }
     }
   }, [isMuted, volume]);
@@ -228,9 +240,14 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
                 autoPlay
                 loop
                 muted={isMuted}
-                preload="metadata"
+                preload="auto"
                 playsInline
-                className="absolute inset-0 w-full h-full object-cover object-center transform-gpu"
+                onError={(e) => {
+                  console.warn('Hero video failed to load, falling back to poster:', e);
+                }}
+                onClick={toggleMute}
+                className="absolute inset-0 w-full h-full object-cover object-center transform-gpu cursor-pointer"
+                title={isMuted ? 'Click video to unmute audio' : 'Click video to mute audio'}
               />
             )}
 
@@ -288,31 +305,31 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
             <div className="flex items-center gap-2 text-xs font-medium tracking-wider text-teal-300">
               <span>Deen Hijrah Academia</span>
               <span aria-hidden="true">·</span>
-              <span>Principal Faculty: Ustadh Mustaqeem Shaikh</span>
+              <span>Principal Faculty: Mustaqeem Shaikh</span>
             </div>
           ) : (
             /* When Video is Playing: Dedicated Sound & Video Transport Controller */
             <div className="flex flex-wrap items-center gap-2.5">
-              {/* Primary Unmute Voice Button */}
+              {/* Primary Unmute Video Button */}
               <button
                 type="button"
                 onClick={toggleMute}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xl active:scale-95 ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xl active:scale-95 cursor-pointer ${
                   isMuted
                     ? 'bg-amber-400 text-slate-950 hover:bg-amber-300 ring-2 ring-amber-400/50 animate-pulse'
                     : 'bg-teal-400/25 text-teal-200 border border-teal-400/40 hover:bg-teal-400/35'
                 }`}
-                title={isMuted ? 'Click to unmute voice audio' : 'Voice audio is playing (click to mute)'}
+                title={isMuted ? 'Click to unmute homepage video audio' : 'Video audio is playing (click to mute)'}
               >
                 {isMuted ? (
                   <>
                     <VolumeX className="w-4 h-4 fill-slate-950" />
-                    <span>Unmute Voice</span>
+                    <span>Unmute Video</span>
                   </>
                 ) : (
                   <>
                     <Volume2 className="w-4 h-4 text-emerald-300" />
-                    <span>Voice Live</span>
+                    <span>Video Audio Live</span>
                   </>
                 )}
               </button>
@@ -429,12 +446,12 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
                     <button
                       type="button"
                       onClick={toggleMute}
-                      className={`group flex items-center gap-2.5 p-2 sm:px-3 sm:py-2.5 rounded-2xl border-2 transition-all shadow-2xl backdrop-blur-md whitespace-nowrap ${
+                      className={`group flex items-center gap-2.5 p-2 sm:px-3 sm:py-2.5 rounded-2xl border-2 transition-all shadow-2xl backdrop-blur-md whitespace-nowrap cursor-pointer ${
                         isMuted
                           ? 'bg-amber-400 text-slate-950 font-bold border-amber-300 ring-4 ring-amber-400/40 animate-pulse hover:bg-amber-300'
                           : 'bg-[#050C17]/90 text-teal-300 border-teal-500/50 hover:bg-[#050C17] hover:border-teal-300'
                       }`}
-                      title={isMuted ? 'Click Square to Unmute Voice & Play Video' : 'Mute Video Audio'}
+                      title={isMuted ? 'Click to Unmute Homepage Video Audio' : 'Click to Mute Video'}
                     >
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-black/25 shrink-0 border border-white/10">
                         {isMuted ? (
@@ -445,7 +462,7 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
                       </div>
                       <div className="text-left pr-1">
                         <div className="text-[11px] font-black uppercase tracking-wider">
-                          {isMuted ? 'Unmute Voice' : 'Audio Playing'}
+                          {isMuted ? 'Unmute Video' : 'Video Audio Live'}
                         </div>
                         <div className="text-[9px] text-slate-800 dark:text-slate-400 font-mono-tabular">
                           {isMuted ? 'Click to Play Audio' : `${Math.round(volume * 100)}% Volume`}
@@ -568,57 +585,56 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
           </div>
         )}
 
-        {/* Floating Prominent Square Unmute / Mute Voice Beacon Button on Video */}
-        {hasBackgroundVideo && (
-          <div className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 z-30 pointer-events-auto">
+        {/* Floating Prominent Unmute Speaker Symbol Button on Homepage Video */}
+        {(hasBackgroundVideo || isCurrentSlideVideo) && (
+          <div className="absolute bottom-20 sm:bottom-24 right-4 sm:right-8 z-40 pointer-events-auto">
             <button
               type="button"
-              onClick={() => {
-                if (bgVideoRef.current) {
-                  if (isMuted) {
-                    bgVideoRef.current.muted = false;
-                    bgVideoRef.current.volume = volume > 0 ? volume : 0.85;
-                    setIsMuted(false);
-                    bgVideoRef.current
-                      .play()
-                      .then(() => setIsVideoPlaying(true))
-                      .catch(() => {});
-                    try {
-                      localStorage.setItem(STORAGE_KEYS.muted, 'false');
-                    } catch {}
-                  } else {
-                    bgVideoRef.current.muted = true;
-                    setIsMuted(true);
-                    try {
-                      localStorage.setItem(STORAGE_KEYS.muted, 'true');
-                    } catch {}
-                  }
-                }
-              }}
-              className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex flex-col items-center justify-center gap-1 border-2 shadow-2xl backdrop-blur-md transition-all hover:scale-105 active:scale-95 group ${
+              onClick={toggleMute}
+              className={`group flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl border-2 transition-all shadow-[0_0_30px_rgba(0,0,0,0.85)] backdrop-blur-xl cursor-pointer select-none active:scale-95 ${
                 isMuted
-                  ? 'bg-amber-400 text-slate-950 border-amber-300 ring-4 ring-amber-400/50 animate-pulse font-bold'
-                  : 'bg-[#040B16]/90 text-teal-300 border-teal-400/60 ring-2 ring-teal-500/20'
+                  ? 'bg-amber-400 text-slate-950 border-amber-300 ring-4 ring-amber-400/50 animate-pulse hover:bg-amber-300 hover:scale-105'
+                  : 'bg-[#040B16]/95 text-teal-300 border-teal-400/60 ring-2 ring-teal-500/30 hover:bg-[#071324] hover:border-teal-300'
               }`}
               title={
                 isMuted
-                  ? 'Click Square to Unmute Voice & Play Background Video'
-                  : 'Audio Active (Click to Mute)'
+                  ? 'Click to Unmute Homepage Video (Sound Currently Off)'
+                  : 'Audio is Live & Playing (Click to Mute)'
               }
             >
               {isMuted ? (
                 <>
-                  <VolumeX className="w-7 h-7 sm:w-8 sm:h-8 fill-current stroke-[2.5]" />
-                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider">
-                    Unmute
-                  </span>
+                  <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-black/15 shrink-0">
+                    <VolumeX className="w-6 h-6 fill-slate-950 stroke-[2.5]" />
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping" />
+                  </div>
+                  <div className="flex flex-col text-left leading-tight pr-1">
+                    <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-950">
+                      Unmute Video
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-900/85">
+                      Click for Sound 🔊
+                    </span>
+                  </div>
                 </>
               ) : (
                 <>
-                  <Volume2 className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-400 stroke-[2.5]" />
-                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-emerald-300">
-                    Voice On
-                  </span>
+                  <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-teal-400/10 shrink-0">
+                    <Volume2 className="w-6 h-6 text-emerald-400 stroke-[2.5]" />
+                  </div>
+                  <div className="flex flex-col text-left leading-tight pr-1">
+                    <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
+                      <span>Sound On</span>
+                      <span className="flex items-center gap-0.5">
+                        <span className="w-1 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                        <span className="w-1 h-3.5 bg-teal-300 rounded-full animate-pulse delay-75" />
+                        <span className="w-1 h-2 bg-emerald-400 rounded-full animate-pulse delay-150" />
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-teal-400/80 font-mono-tabular">
+                      Click to Mute 🔇
+                    </span>
+                  </div>
                 </>
               )}
             </button>

@@ -482,7 +482,7 @@ export const PathOfKnowledgeRoadmap: React.FC<PathOfKnowledgeRoadmapProps> = ({
               <div className="space-y-1.5">
                 <div className="text-xs font-mono-tabular academy-text-secondary">
                   Stage {spotlightTrack.currentNode.stageCode} ·{' '}
-                  {spotlightTrack.currentNode.weekLabel} · Instructor: Ustadh{' '}
+                  {spotlightTrack.currentNode.weekLabel} · Instructor:{' '}
                   {spotlightTrack.course.instructorName}
                 </div>
                 <h3 className="font-display text-xl font-bold text-white">
@@ -628,7 +628,7 @@ export const PathOfKnowledgeRoadmap: React.FC<PathOfKnowledgeRoadmapProps> = ({
                         </div>
                         <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] academy-text-secondary">
                           <span className="truncate">
-                            {sessionCourse?.title || 'Public Academy Orientation'} · Ustadh{' '}
+                            {sessionCourse?.title || 'Public Academy Orientation'} ·{' '}
                             {session.instructorName}
                           </span>
                           {isSessionUnlocked && session.zoomJoinUrl ? (
@@ -736,7 +736,7 @@ export const PathOfKnowledgeRoadmap: React.FC<PathOfKnowledgeRoadmapProps> = ({
                       <span className="text-teal-400 font-semibold">{track.course.category}</span>
                       <span aria-hidden="true">·</span>
                       <span className="academy-text-secondary">
-                        Ustadh {track.course.instructorName}
+                        {track.course.instructorName}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span className="font-mono-tabular academy-text-secondary">

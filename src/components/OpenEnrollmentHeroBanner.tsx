@@ -192,7 +192,7 @@ export const OpenEnrollmentHeroBanner: React.FC<OpenEnrollmentHeroBannerProps> =
                     );
                   })}
                   <span className="text-slate-300 text-[11px]">
-                    Principal Faculty: Ustadh {activeCourse.instructorName || 'Mustaqeem Shaikh'}
+                    Principal Faculty: {activeCourse.instructorName || 'Mustaqeem Shaikh'}
                   </span>
                 </div>
 

@@ -110,7 +110,7 @@ export const FacultyPage: React.FC<FacultyPageProps> = ({
     joinFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // Courses taught by Principal Faculty Ustadh Mustaqeem Shaikh
+  // Courses taught by Principal Faculty Mustaqeem Shaikh
   const founderCourses = courses.filter(
     (c) =>
       !c.instructorId ||
@@ -223,13 +223,13 @@ export const FacultyPage: React.FC<FacultyPageProps> = ({
             <GraduationCap className="w-4 h-4 shrink-0" />
             <span>Deen Hijrah Academia · Scholarly Directorate &amp; Faculty</span>
             <span aria-hidden="true">·</span>
-            <span>Led by Founder &amp; Principal Faculty Ustadh Mustaqeem Shaikh</span>
+            <span>Led by Founder &amp; Principal Faculty Mustaqeem Shaikh</span>
           </div>
           <h1 className="font-display text-3xl sm:text-4xl font-bold text-balance">
             Our Faculty &amp; Scholarly Mentors
           </h1>
           <p className="text-sm academy-text-secondary max-w-3xl leading-relaxed">
-            Meet our Principal Faculty and Founder, Ustadh Mustaqeem Shaikh, alongside our course
+            Meet our Principal Faculty and Founder, Mustaqeem Shaikh, alongside our course
             instructors. Qualified scholars and educators may apply below to join our faculty and
             receive dedicated Teacher Studio access to upload recordings for their assigned courses.
           </p>
@@ -257,9 +257,9 @@ export const FacultyPage: React.FC<FacultyPageProps> = ({
         </div>
       </div>
 
-      {/* SECTION 1: PRINCIPAL FACULTY & FOUNDER SPOTLIGHT — USTADH MUSTAQEEM SHAIKH */}
+      {/* SECTION 1: PRINCIPAL FACULTY & FOUNDER SPOTLIGHT — MUSTAQEEM SHAIKH */}
       <section
-        aria-label="Principal Faculty and Founder Ustadh Mustaqeem Shaikh"
+        aria-label="Principal Faculty and Founder Mustaqeem Shaikh"
         className="rounded-xl academy-surface border border-teal-500/35 p-6 sm:p-8 lg:p-10 space-y-8"
       >
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
@@ -269,7 +269,7 @@ export const FacultyPage: React.FC<FacultyPageProps> = ({
               <div className="relative w-48 h-48 sm:w-56 sm:h-56 rounded-3xl overflow-hidden border-2 border-teal-400 shadow-2xl">
                 <img
                   src={founderProfile.avatarUrl}
-                  alt="Ustadh Mustaqeem Shaikh — Founder & Principal Faculty"
+                  alt="Mustaqeem Shaikh — Founder & Principal Faculty"
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover"
                 />
@@ -295,12 +295,12 @@ export const FacultyPage: React.FC<FacultyPageProps> = ({
               </div>
               <p className="text-[11px] academy-text-secondary max-w-xs">
                 All curriculum standards, academy-wide administration, and sanad verifications are
-                overseen directly by Ustadh Mustaqeem Shaikh.
+                overseen directly by Mustaqeem Shaikh.
               </p>
             </div>
           </div>
 
-          {/* Right 8 Columns: Full Biography, Specializations & Courses Taught by Ustadh Mustaqeem Shaikh */}
+          {/* Right 8 Columns: Full Biography, Specializations & Courses Taught by Mustaqeem Shaikh */}
           <div className="lg:col-span-8 space-y-5">
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2 text-xs text-teal-400 font-medium">
@@ -309,10 +309,10 @@ export const FacultyPage: React.FC<FacultyPageProps> = ({
                 <span>Chair of Seerah, Classical Arabic &amp; Usul al-Fiqh</span>
               </div>
               <h2 className="font-display text-2xl sm:text-3xl font-bold text-white">
-                Ustadh Mustaqeem Shaikh
+                Mustaqeem Shaikh
               </h2>
               <p className="text-sm academy-text-secondary leading-relaxed">
-                Ustadh Mustaqeem Shaikh is the Founder, Principal Faculty, and Academic Director of
+                Mustaqeem Shaikh is the Founder, Principal Faculty, and Academic Director of
                 Deen Hijrah Academia. His teaching methodology bridges classical Islamic textual
                 traditions with structured modern academic pedagogy—guiding students through
                 analytical Seerah chronicles, Quranic morphology and Balaghah (rhetoric), and the
@@ -320,7 +320,7 @@ export const FacultyPage: React.FC<FacultyPageProps> = ({
               </p>
               <p className="text-sm academy-text-secondary leading-relaxed">
                 Through weekly live Zoom seminars, primary-source folio readings, and personalized
-                written feedback on student submissions, Ustadh Mustaqeem mentors seekers of
+                written feedback on student submissions, Mustaqeem Shaikh mentors seekers of
                 knowledge across North America, Europe, the Middle East, and Asia.
               </p>
             </div>
@@ -355,11 +355,11 @@ export const FacultyPage: React.FC<FacultyPageProps> = ({
               </div>
             </div>
 
-            {/* Courses Led by Ustadh Mustaqeem Shaikh */}
+            {/* Courses Led by Mustaqeem Shaikh */}
             {founderCourses.length > 0 && (
               <div className="pt-2 space-y-2.5">
                 <div className="text-xs font-semibold text-teal-400">
-                  Courses Taught by Ustadh Mustaqeem Shaikh ({founderCourses.length}):
+                  Courses Taught by Mustaqeem Shaikh ({founderCourses.length}):
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {founderCourses.map((course) => {
@@ -406,7 +406,7 @@ export const FacultyPage: React.FC<FacultyPageProps> = ({
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors whitespace-nowrap"
               >
                 <Mail className="w-3.5 h-3.5" />
-                <span>Message Ustadh Mustaqeem Shaikh</span>
+                <span>Message Mustaqeem Shaikh</span>
               </button>
               <button
                 type="button"
@@ -461,7 +461,7 @@ export const FacultyPage: React.FC<FacultyPageProps> = ({
                 Applications Open for Visiting Course Instructors
               </div>
               <p className="text-xs academy-text-secondary max-w-2xl">
-                Ustadh Mustaqeem Shaikh currently leads all primary courses. Use the &ldquo;Join Our
+                Mustaqeem Shaikh currently leads all primary courses. Use the &ldquo;Join Our
                 Faculty&rdquo; form below to register as a teacher for a specific course and receive
                 instant Teacher Studio access to upload your class recordings.
               </p>
@@ -576,7 +576,7 @@ export const FacultyPage: React.FC<FacultyPageProps> = ({
               timezone, and resume/CV. Once joined as a teacher, you will immediately receive
               <strong> Teacher Studio access</strong> to upload class recordings and manage syllabi
               <strong> exclusively for the courses you teach</strong> (full Academy Admin privileges
-              remain solely with Founder Ustadh Mustaqeem Shaikh).
+              remain solely with Founder Mustaqeem Shaikh).
             </p>
           </div>
 
@@ -587,7 +587,7 @@ export const FacultyPage: React.FC<FacultyPageProps> = ({
             </div>
             <p className="text-[11px] academy-text-secondary leading-relaxed">
               Teachers get upload &amp; management access <strong>only</strong> for their assigned
-              courses. Global Admin access stays strictly with Ustadh Mustaqeem Shaikh.
+              courses. Global Admin access stays strictly with Mustaqeem Shaikh.
             </p>
           </div>
         </div>
@@ -639,7 +639,7 @@ export const FacultyPage: React.FC<FacultyPageProps> = ({
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="e.g. Ustadh Tariq Al-Misri"
+                placeholder="e.g. Tariq Al-Misri"
                 className="w-full px-3.5 py-2.5 text-sm rounded-lg academy-elevated focus:outline-none focus:border-teal-400"
               />
             </div>

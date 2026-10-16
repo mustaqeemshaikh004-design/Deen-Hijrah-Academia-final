@@ -83,7 +83,7 @@ export const LessonThreadedComments: React.FC<LessonThreadedCommentsProps> = ({
             <span>Lecture Q&amp;A &amp; Discussion</span>
           </div>
           <p className="text-xs academy-text-secondary">
-            Ask questions on &ldquo;{lessonTitle}&rdquo; or read verified explanations from Ustadh and fellow scholars.
+            Ask questions on &ldquo;{lessonTitle}&rdquo; or read verified explanations from faculty and fellow scholars.
           </p>
         </div>
         <div className="text-xs font-mono-tabular text-teal-300 font-semibold px-3 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 self-start sm:self-auto">

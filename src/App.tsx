@@ -407,7 +407,7 @@ function AcademyPortalContent() {
       });
       if (res.ok) {
         await handleRefreshAll();
-        showToast('Homework successfully submitted to Ustadh Mustaqeem Shaikh!');
+        showToast('Homework successfully submitted to Mustaqeem Shaikh!');
       } else {
         const data = await res.json().catch(() => ({}));
         showToast(data.error || 'Failed to submit homework. Please try again.');
@@ -870,7 +870,7 @@ function AcademyPortalContent() {
                     {/* Continuous Looping Course Stream / Infinite Marquee (Source Code Style) */}
                     <motion.div variants={sectionRevealVariants}>
                       <InfiniteCourseMarquee
-                        courses={publishedCourses}
+                        courses={courses}
                         lessons={lessons}
                         enrollments={enrollments}
                         enrolledCourseIds={enrolledCourseIds}
@@ -894,7 +894,7 @@ function AcademyPortalContent() {
                     <div className="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 2xl:px-12 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-teal-400">
-                          Faculty Quick Controls (Ustadh Mustaqeem Shaikh):
+                          Faculty Quick Controls (Mustaqeem Shaikh):
                         </span>
                         <span className="academy-text-secondary">
                           Upload syllabi &amp; boxes, set student limits, upload recordings, or
@@ -1344,7 +1344,7 @@ function AcademyPortalContent() {
                   </motion.section>
                 )}
 
-                {/* PRINCIPAL FACULTY SPOTLIGHT: USTADH MUSTAQEEM SHAIKH ("MS" Monogram or Custom Uploaded Portrait) */}
+                {/* PRINCIPAL FACULTY SPOTLIGHT: MUSTAQEEM SHAIKH ("MS" Monogram or Custom Uploaded Portrait) */}
                 {activeView === 'home' && (
                   <motion.section
                     variants={sectionRevealVariants}
@@ -1361,7 +1361,7 @@ function AcademyPortalContent() {
                             <div className="relative w-44 h-44 sm:w-52 sm:h-52 rounded-3xl overflow-hidden border-2 border-teal-400 shadow-2xl">
                               <img
                                 src={founderProfile.avatarUrl}
-                                alt="Ustadh Mustaqeem Shaikh"
+                                alt="Mustaqeem Shaikh"
                                 className="w-full h-full object-cover"
                               />
                             </div>
@@ -1434,7 +1434,7 @@ function AcademyPortalContent() {
                             Principal Faculty &amp; Academic Director
                           </div>
                           <h2 className="font-display text-2xl sm:text-3xl font-bold">
-                            Ustadh Mustaqeem Shaikh
+                            Mustaqeem Shaikh
                           </h2>
                           <p className="text-sm academy-text-secondary leading-relaxed max-w-2xl">
                             Dedicated to reviving classical Islamic scholarship with contemporary
@@ -1483,7 +1483,7 @@ function AcademyPortalContent() {
                 </div>
                 <p className="text-xs academy-text-secondary max-w-sm leading-relaxed">
                   Sacred knowledge and spiritual elevation through structured online curricula, live
-                  Zoom classrooms, and faculty mentorship led by Ustadh Mustaqeem Shaikh.
+                  Zoom classrooms, and faculty mentorship led by Mustaqeem Shaikh.
                 </p>
                 <button
                   type="button"

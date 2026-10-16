@@ -270,7 +270,7 @@ export const CoolEnrollmentView: React.FC<CoolEnrollmentViewProps> = ({
                         {c.title}
                       </h3>
                       <p className="text-xs text-amber-300 font-medium mt-0.5">
-                        Ustadh {c.instructorName}
+                        {c.instructorName}
                       </p>
 
                       <p className="text-xs academy-text-secondary mt-2 line-clamp-2 leading-relaxed">
@@ -334,7 +334,7 @@ export const CoolEnrollmentView: React.FC<CoolEnrollmentViewProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs font-mono-tabular">
                     <div className="p-3 rounded-xl academy-surface border border-white/5">
                       <span className="academy-text-muted block text-[10px]">FACULTY</span>
-                      <span className="font-bold text-white">Ustadh {selectedCourse.instructorName}</span>
+                      <span className="font-bold text-white">{selectedCourse.instructorName}</span>
                     </div>
                     <div className="p-3 rounded-xl academy-surface border border-white/5">
                       <span className="academy-text-muted block text-[10px]">RECORDINGS ARCHIVE</span>
@@ -379,7 +379,7 @@ export const CoolEnrollmentView: React.FC<CoolEnrollmentViewProps> = ({
                   <span>Step 2: Choose Your Academic Track</span>
                 </h2>
                 <p className="text-xs academy-text-secondary mt-0.5">
-                  Decide how you will engage with Ustadh {selectedCourse?.instructorName} and the course materials.
+                  Decide how you will engage with {selectedCourse?.instructorName} and the course materials.
                 </p>
               </div>
 
@@ -407,7 +407,7 @@ export const CoolEnrollmentView: React.FC<CoolEnrollmentViewProps> = ({
                       <span>Interactive Live Cohort</span>
                     </h3>
                     <p className="text-xs academy-text-secondary mt-1 leading-relaxed">
-                      Attend live interactive Zoom seminars, engage in real-time Q&A with the Ustadh, participate in homework reviews, and maintain an attendance streak.
+                      Attend live interactive Zoom seminars, engage in real-time Q&A with the instructor, participate in homework reviews, and maintain an attendance streak.
                     </p>
                   </div>
                   <ul className="space-y-2 text-xs academy-text-secondary pt-2 border-t academy-divider">

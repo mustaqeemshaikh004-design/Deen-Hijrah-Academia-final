@@ -169,7 +169,7 @@ export const announcements = pgTable('announcements', {
   instructorId: integer('instructor_id')
     .references(() => profiles.id)
     .notNull(),
-  instructorName: text('instructor_name').notNull().default('Ustadh Mustaqeem Shaikh'),
+  instructorName: text('instructor_name').notNull().default('Mustaqeem Shaikh'),
   title: text('title').notNull(),
   content: text('content').notNull(),
   priority: text('priority').notNull().default('normal'), // 'normal' | 'important'

@@ -26,7 +26,7 @@ import {
   ThumbsUp,
   ThumbsDown,
 } from 'lucide-react';
-import { getZoomEventDetails } from '../lib/zoomService.ts';
+import { getZoomEventDetails, safeOpenLink } from '../lib/zoomService.ts';
 import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
 import { ClassRecordingsVault } from './ClassRecordingsVault.tsx';
 import { ClassSessionSurveyWidget } from './ClassSessionSurveyWidget.tsx';
@@ -421,8 +421,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </h1>
             <p className="text-xs sm:text-sm academy-text-secondary max-w-4xl">
               Watch class recordings for your enrolled courses, join scheduled live Zoom sessions in
-              your local country time, submit homework assignments, and chat directly with Ustadh
-              Mustaqeem Shaikh.
+              your local country time, submit homework assignments, and chat directly with
+              Mustaqeem Shaikh and course faculty.
             </p>
           </div>
 
@@ -589,7 +589,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         selectedTimezone={selectedTimezone}
         onJoinZoomMeeting={(ev, c) => {
           if (ev?.zoomJoinUrl) {
-            window.open(ev.zoomJoinUrl, '_blank');
+            safeOpenLink(ev.zoomJoinUrl);
           } else {
             onWatchCourse(c);
           }
@@ -1251,7 +1251,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           initialCourseId={enrolledCourses[0]?.id || null}
           currentProfile={profile}
           onToggleLessonProgress={onToggleLessonProgress}
-          onAskUstadh={(subj) => {
+          onAskFaculty={(subj) => {
             setSubject(subj);
             setActiveTab('inbox');
           }}
@@ -1270,7 +1270,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </h2>
               <p className="text-xs academy-text-secondary">
                 Upload your completed assignment or written reflection for review and grade status
-                evaluation by Ustadh Mustaqeem Shaikh.
+                evaluation by Mustaqeem Shaikh and course faculty.
               </p>
 
               {enrolledCourses.length === 0 ? (
@@ -1396,7 +1396,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       onChange={(e) => setHwContent(e.target.value)}
                       placeholder={
                         hwAttachment
-                          ? 'Optional notes or questions for Ustadh regarding your attached homework...'
+                          ? 'Optional notes or questions regarding your attached homework...'
                           : 'Write your homework submission here...'
                       }
                       className="w-full px-3 py-2 text-sm rounded-lg academy-elevated"
@@ -1514,7 +1514,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         <div className="pt-3 border-t academy-divider space-y-3">
                           <div className="flex items-center justify-between gap-2">
                             <div className="text-xs font-semibold text-teal-300">
-                              Faculty Feedback Section · Tutor: Ustadh{' '}
+                              Faculty Feedback Section · Instructor:{' '}
                               {courseObj?.instructorName || 'Mustaqeem Shaikh'}
                             </div>
                             {profile?.role !== 'admin' &&
@@ -1548,7 +1548,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             </div>
                           ) : (
                             <div className="p-3 rounded-lg academy-surface text-xs academy-text-muted">
-                              Awaiting faculty comment and grade status from Ustadh{' '}
+                              Awaiting faculty comment and grade status from{' '}
                               {courseObj?.instructorName || 'Mustaqeem Shaikh'}.
                             </div>
                           )}
@@ -1855,7 +1855,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             </h2>
             <p className="text-xs academy-text-secondary mt-1">
               Click &ldquo;Join Meeting&rdquo; at the scheduled local time in your country to enter
-              the live Zoom session with Ustadh Mustaqeem Shaikh.
+              the live Zoom session with Mustaqeem Shaikh and course faculty.
             </p>
           </div>
 
@@ -2046,7 +2046,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               Chat with Tutor &amp; Inbox
             </h3>
             <p className="text-xs academy-text-secondary">
-              Send academic questions directly to Ustadh Mustaqeem Shaikh and view tutor replies.
+              Send academic questions directly to Mustaqeem Shaikh and view instructor replies.
             </p>
             <div className="space-y-1.5 pt-2">
               <button
@@ -2138,7 +2138,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     required
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
-                    placeholder="Write your question to Ustadh Mustaqeem Shaikh..."
+                    placeholder="Write your question to Mustaqeem Shaikh..."
                     className="w-full px-3 py-2 text-sm rounded-lg academy-elevated focus:outline-none focus:border-teal-400"
                   />
                 </div>
@@ -2181,7 +2181,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             <span>
                               {inboxMode === 'inbox' ? 'From: ' : 'To: '}
                               <strong className="text-teal-400">
-                                {otherParty?.fullName || 'Ustadh Mustaqeem Shaikh'}
+                                {otherParty?.fullName || 'Mustaqeem Shaikh'}
                               </strong>
                             </span>
                             <div className="flex items-center gap-3">

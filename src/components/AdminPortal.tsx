@@ -859,7 +859,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         <div>
           <div className="text-xs font-semibold text-teal-400 font-mono-tabular">
             {isTeacherMode
-              ? `Faculty & Teacher Portal · Instructor Workspace · ${profile?.fullName || 'Ustadh Mustaqeem Shaikh'}`
+              ? `Faculty & Teacher Portal · Instructor Workspace · ${profile?.fullName || 'Mustaqeem Shaikh'}`
               : 'Academy Director Portal (/admin) · Principal Faculty: Mustaqeem Shaikh'}
           </div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold mt-1 text-white">
@@ -3592,7 +3592,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       <div className="text-xs font-semibold text-teal-400">
                         Principal Faculty &amp; Founder Emblem
                       </div>
-                      <h3 className="font-display text-lg font-bold">Ustadh Mustaqeem Shaikh</h3>
+                      <h3 className="font-display text-lg font-bold">Mustaqeem Shaikh</h3>
                       <p className="text-xs academy-text-secondary">
                         Currently displaying:{' '}
                         <strong>
@@ -4126,7 +4126,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
                                 receiverId: selectedStudentCourseDashboard.student.id,
-                                subject: `Message from Ustadh regarding ${selectedStudentCourseDashboard.course.title}`,
+                                subject: `Message from Instructor regarding ${selectedStudentCourseDashboard.course.title}`,
                                 body: directStudentMessage.trim(),
                               }),
                             });
@@ -4407,7 +4407,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               content: newAnnContent.trim(),
                               courseId: newAnnCourseId === 'all' ? null : newAnnCourseId,
                               priority: newAnnPriority,
-                              instructorName: profile?.fullName || 'Ustadh Mustaqeem Shaikh',
+                              instructorName: profile?.fullName || 'Mustaqeem Shaikh',
                             }),
                           });
                           if (res.ok) {

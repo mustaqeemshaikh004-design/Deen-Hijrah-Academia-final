@@ -165,7 +165,7 @@ export const AnimatedPdfViewer: React.FC<AnimatedPdfViewerProps> = ({
 
         const lines = [
           `Course Program: ${title}`,
-          `Academic Directorate: Ustadh Mustaqeem Shaikh`,
+          `Academic Directorate: Mustaqeem Shaikh`,
           `Term Format: Interactive Live Sessions, Annotated Texts & Recorded Seminars`,
           '',
           `Key Learning Modules (Section ${i}):`,

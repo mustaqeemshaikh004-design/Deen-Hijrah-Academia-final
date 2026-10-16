@@ -13,7 +13,7 @@ export interface GeneratedZoomMeeting {
   passcodeHash: string; // Base64 URL param
   zoomJoinUrl: string; // Primary Zoom Join URL for students
   zoomWebClientUrl: string; // Browser-only join without installing app
-  zoomStartUrl: string; // Host launch URL for Ustadh/Admin
+  zoomStartUrl: string; // Host launch URL for Instructor/Admin
   zoomAppStartUrl: string; // Native zoommtg protocol for Host (role=1)
   zoomAppJoinUrl: string; // Native zoommtg protocol for Students
   hostKey: string; // 6-digit Zoom Host PIN
@@ -45,7 +45,7 @@ export function generateRealZoomMeeting(params: {
   const hostKey = String(Math.floor(100000 + Math.random() * 900000));
 
   const instructor = params.instructorName || 'Mustaqeem Shaikh';
-  const encodedInstructor = encodeURIComponent(`Ustadh ${instructor} (Host)`);
+  const encodedInstructor = encodeURIComponent(`${instructor} (Host)`);
 
   // Official Zoom URL Formats
   const zoomJoinUrl = `https://us05web.zoom.us/j/${cleanMeetingId}?pwd=${passcodeHash}`;
@@ -124,7 +124,7 @@ export function getZoomEventDetails(
   const hostKey = event.zoomHostKey || hostKeyDigits;
 
   const instructor = event.instructorName || 'Mustaqeem Shaikh';
-  const encodedHostName = encodeURIComponent(`Ustadh ${instructor} (Host)`);
+  const encodedHostName = encodeURIComponent(`${instructor} (Host)`);
 
   const joinUrl =
     event.zoomJoinUrl || `https://us05web.zoom.us/j/${cleanId}?pwd=${passcodeHash}`;

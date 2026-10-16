@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 
 interface AcademyLogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   animated?: boolean;
+  pulse?: boolean;
 }
 
 export const AcademyLogo: React.FC<AcademyLogoProps> = ({
   size = 'md',
   animated = false,
+  pulse = false,
 }) => {
   const dimensions = {
     sm: 28,
@@ -22,10 +24,19 @@ export const AcademyLogo: React.FC<AcademyLogoProps> = ({
       className="relative inline-flex items-center justify-center shrink-0 select-none"
       style={{ width: dimensions, height: dimensions }}
     >
-      {/* Ambient Turquoise Glow */}
-      <div
+      {/* Ambient Turquoise & Gold Glow */}
+      <motion.div
         aria-hidden="true"
-        className="absolute inset-0 rounded-full bg-teal-400/20 blur-md"
+        animate={
+          pulse
+            ? {
+                scale: [1, 1.25, 1],
+                opacity: [0.25, 0.6, 0.25],
+              }
+            : {}
+        }
+        transition={pulse ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : {}}
+        className="absolute inset-0 rounded-full bg-gradient-to-tr from-teal-400/30 to-amber-400/20 blur-md pointer-events-none"
       />
 
       <motion.svg
@@ -35,8 +46,23 @@ export const AcademyLogo: React.FC<AcademyLogoProps> = ({
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         initial={animated ? { rotate: -30, scale: 0.7, opacity: 0 } : false}
-        animate={animated ? { rotate: 0, scale: 1, opacity: 1 } : false}
-        transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+        animate={
+          animated
+            ? { rotate: 0, scale: 1, opacity: 1 }
+            : pulse
+              ? {
+                  scale: [1, 1.05, 1],
+                  filter: ['drop-shadow(0 0 0px #2dd4bf)', 'drop-shadow(0 0 8px #2dd4bf)', 'drop-shadow(0 0 0px #2dd4bf)'],
+                }
+              : false
+        }
+        transition={
+          animated
+            ? { duration: 0.9, ease: [0.16, 1, 0.3, 1] }
+            : pulse
+              ? { duration: 2, repeat: Infinity, ease: 'easeInOut' }
+              : undefined
+        }
         className="relative z-10"
       >
         <defs>
@@ -128,88 +154,90 @@ interface SplashIntroProps {
 }
 
 export const SplashIntro: React.FC<SplashIntroProps> = ({ onComplete }) => {
+  useEffect(() => {
+    // Elegant transition completion timer
+    const timer = setTimeout(() => {
+      onComplete();
+    }, 1750);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
   return (
     <motion.div
       key="academy-splash-intro"
       initial={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: 1.04, filter: 'blur(8px)' }}
-      transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1] }}
+      exit={{ opacity: 0, scale: 1.06, filter: 'blur(10px)' }}
+      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       onClick={onComplete}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#050C17] text-slate-100 px-6 cursor-pointer select-none overflow-hidden"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#030812] text-slate-100 px-6 cursor-pointer select-none overflow-hidden"
     >
-      {/* Ambient Radial Turquoise & Navy Glow */}
+      {/* Ambient Radial Celestial Glows */}
       <motion.div
-        initial={{ scale: 0.6, opacity: 0 }}
-        animate={{ scale: 1.2, opacity: 1 }}
-        transition={{ duration: 1.4, ease: 'easeOut' }}
-        className="pointer-events-none absolute w-[480px] h-[480px] rounded-full bg-teal-500/15 blur-3xl"
+        initial={{ scale: 0.4, opacity: 0 }}
+        animate={{ scale: [0.8, 1.25, 1], opacity: [0.3, 0.7, 0.5] }}
+        transition={{ duration: 2.2, ease: 'easeOut' }}
+        className="pointer-events-none absolute w-[520px] h-[520px] rounded-full bg-gradient-to-tr from-teal-500/20 via-cyan-500/15 to-amber-500/10 blur-3xl"
       />
       <motion.div
-        initial={{ scale: 0.5, opacity: 0 }}
-        animate={{ scale: 1.1, opacity: 1 }}
-        transition={{ duration: 1.6, delay: 0.2, ease: 'easeOut' }}
-        className="pointer-events-none absolute w-[320px] h-[320px] rounded-full bg-cyan-500/10 blur-2xl"
+        initial={{ scale: 0.2, opacity: 0 }}
+        animate={{ scale: 1.1, opacity: 0.35 }}
+        transition={{ duration: 1.6, delay: 0.15, ease: 'easeOut' }}
+        className="pointer-events-none absolute w-[360px] h-[360px] rounded-full bg-teal-400/15 blur-2xl"
       />
 
-      {/* Rotating Outer Sacred Geometry Ring */}
-      <div className="relative flex items-center justify-center mb-8">
-        <motion.div
-          initial={{ rotate: 0, scale: 0.8, opacity: 0 }}
-          animate={{ rotate: 90, scale: 1, opacity: 0.45 }}
-          transition={{ duration: 2.2, ease: 'easeOut' }}
-          className="absolute w-36 h-36 rounded-full border border-dashed border-teal-400/50"
-        />
-        <motion.div
-          initial={{ rotate: 45, scale: 0.7, opacity: 0 }}
-          animate={{ rotate: -45, scale: 1, opacity: 0.3 }}
-          transition={{ duration: 2.2, ease: 'easeOut' }}
-          className="absolute w-44 h-44 rounded-full border border-amber-400/30"
-        />
-        <AcademyLogo size="xl" animated />
-      </div>
-
-      {/* Brand Title & Subtitle Reveal */}
+      {/* Central Cool Icon Transition: Orbital Rotating Rings & Pulsing Core */}
       <motion.div
-        initial={{ y: 18, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.7, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
-        className="text-center space-y-2 relative z-10"
+        initial={{ scale: 0.4, opacity: 0, rotate: -30 }}
+        animate={{ scale: 1, opacity: 1, rotate: 0 }}
+        transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
+        className="relative flex items-center justify-center mb-6"
       >
-        <div className="text-xs font-medium tracking-[0.25em] uppercase text-teal-400">
-          Bismillahir Rahmanir Raheem
-        </div>
-        <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-wider text-white">
+        {/* Outer Counter-Rotating Dashed Celestial Orbit */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+          className="absolute w-48 h-48 rounded-full border border-teal-400/40 border-dashed pointer-events-none"
+        />
+
+        {/* Middle Clockwise Starlight Orbit */}
+        <motion.div
+          animate={{ rotate: -360 }}
+          transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}
+          className="absolute w-40 h-40 rounded-full border border-amber-400/35 border-dotted pointer-events-none"
+        />
+
+        {/* Expanding Cosmic Ripple Halo Ring */}
+        <motion.div
+          initial={{ scale: 0.7, opacity: 0 }}
+          animate={{ scale: [0.8, 1.4, 1.6], opacity: [0.6, 0.25, 0] }}
+          transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+          className="absolute w-32 h-32 rounded-full border-2 border-teal-300/40 pointer-events-none"
+        />
+
+        {/* Breathing Radiant Core Badge */}
+        <motion.div
+          animate={{ scale: [1, 1.06, 1] }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+          className="relative p-5 rounded-3xl bg-[#061427]/90 shadow-[0_0_40px_rgba(45,212,191,0.25)] border border-teal-400/40 ring-2 ring-teal-300/20 backdrop-blur-xl"
+        >
+          <AcademyLogo size="xl" animated pulse />
+        </motion.div>
+      </motion.div>
+
+      {/* Elegant Brand Title Reveal without personal name or loading bar */}
+      <motion.div
+        initial={{ y: 16, opacity: 0, filter: 'blur(4px)' }}
+        animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
+        transition={{ duration: 0.7, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        className="text-center space-y-1.5 relative z-10"
+      >
+        <h1 className="font-brand-emblem text-2xl sm:text-3xl font-bold tracking-[0.22em] text-transparent bg-clip-text bg-gradient-to-r from-teal-300 via-amber-200 to-teal-100 uppercase drop-shadow-md">
           Deen Hijrah Academia
         </h1>
-        <p className="text-xs sm:text-sm text-slate-300 tracking-wide">
-          Sacred Knowledge &amp; Spiritual Journey · Ustadh Mustaqeem Shaikh
+        <p className="text-xs text-teal-400/80 font-medium tracking-widest uppercase">
+          Sacred Knowledge &amp; Spiritual Journey
         </p>
       </motion.div>
-
-      {/* Animated Loading Bar */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.4 }}
-        className="mt-8 w-56 sm:w-64 h-1 rounded-full bg-slate-800/90 overflow-hidden relative z-10"
-      >
-        <motion.div
-          initial={{ width: '0%' }}
-          animate={{ width: '100%' }}
-          transition={{ duration: 1.55, ease: [0.16, 1, 0.3, 1] }}
-          onAnimationComplete={onComplete}
-          className="h-full bg-gradient-to-r from-teal-400 via-cyan-300 to-amber-300 rounded-full"
-        />
-      </motion.div>
-
-      <motion.span
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 0.65 }}
-        transition={{ delay: 0.6 }}
-        className="mt-3 text-[11px] text-slate-400 font-mono-tabular"
-      >
-        Initializing Sanctuary &amp; Live Classrooms...
-      </motion.span>
     </motion.div>
   );
 };

@@ -115,13 +115,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setMessages(data.messages || []);
           setHomework(data.homework || []);
         }
+      } else if (res.status === 401 || res.status === 403) {
+        updateActiveToken(null);
+        setProfile(null);
       }
     } catch (err) {
-      console.error('Error syncing profile:', err);
+      console.warn('Profile sync notice:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [updateActiveToken]);
 
   const completeGoogleSignIn = useCallback(
     async (params: {
