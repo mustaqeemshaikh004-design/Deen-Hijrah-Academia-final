@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { loadStore } from '../lib/fallbackStore.ts';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   GraduationCap,
@@ -34,23 +35,30 @@ export const OpenEnrollmentHeroBanner: React.FC<OpenEnrollmentHeroBannerProps> =
   onStartEnroll,
   onExploreCourses,
 }) => {
-  // Filter courses that are published and not coming soon
-  const openCourses = courses.filter((c) => {
-    return c.status === 'published' && c.enrollmentStatus !== 'coming_soon';
-  });
+  const fallbackList = useMemo(() => {
+    try {
+      const st = loadStore();
+      return st.courses || [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  // Display ALL courses in the academy without filtering out any course
+  const allCourses = courses.length > 0 ? courses : fallbackList;
 
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(
-    openCourses[0]?.id ?? null
+    allCourses[0]?.id ?? null
   );
 
   // Keep selected course valid
   useEffect(() => {
-    if (openCourses.length > 0) {
-      if (!selectedCourseId || !openCourses.some((c) => c.id === selectedCourseId)) {
-        setSelectedCourseId(openCourses[0].id);
+    if (allCourses.length > 0) {
+      if (!selectedCourseId || !allCourses.some((c) => c.id === selectedCourseId)) {
+        setSelectedCourseId(allCourses[0].id);
       }
     }
-  }, [openCourses, selectedCourseId]);
+  }, [allCourses, selectedCourseId]);
 
   // Handle escape key to close modal
   useEffect(() => {
@@ -63,11 +71,11 @@ export const OpenEnrollmentHeroBanner: React.FC<OpenEnrollmentHeroBannerProps> =
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // If no open courses or modal is not open, return null
-  if (!isOpen || openCourses.length === 0) return null;
+  // If no courses or modal is not open, return null
+  if (!isOpen || allCourses.length === 0) return null;
 
   const activeCourse =
-    openCourses.find((c) => c.id === selectedCourseId) || openCourses[0];
+    allCourses.find((c) => c.id === selectedCourseId) || allCourses[0];
 
   const isEnrolledInActive = enrolledCourseIds.includes(activeCourse.id);
 
@@ -135,29 +143,60 @@ export const OpenEnrollmentHeroBanner: React.FC<OpenEnrollmentHeroBannerProps> =
             </button>
           </div>
 
-          {/* Program Selector Tabs if multiple courses are open */}
-          {openCourses.length > 1 && (
-            <div className="relative z-10 flex flex-wrap items-center gap-2 pt-1">
-              <span className="text-xs text-slate-400 mr-1 font-medium">Select Cohort:</span>
-              {openCourses.map((c) => {
+          {/* ALL Courses Appears: Prominent Course Cards / Selector Grid */}
+          <div className="relative z-10 space-y-2 pt-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                <span>All Academic Programs ({allCourses.length} Available)</span>
+              </span>
+              <span className="text-[11px] text-slate-400">Select any course to view details &amp; enroll</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-40 overflow-y-auto no-scrollbar p-1">
+              {allCourses.map((c) => {
                 const isSelected = c.id === activeCourse.id;
+                const isEnrolled = enrolledCourseIds.includes(c.id);
                 return (
                   <button
                     key={c.id}
                     type="button"
                     onClick={() => setSelectedCourseId(c.id)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`group relative flex items-center gap-2.5 p-2 rounded-xl border text-left transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-400/60 shadow-lg'
-                        : 'academy-surface text-slate-300 hover:text-white hover:border-teal-400/50'
+                        ? 'bg-amber-400 text-slate-950 border-amber-300 ring-2 ring-amber-400/50 shadow-lg scale-102'
+                        : 'bg-black/50 hover:bg-black/70 border-white/10 text-slate-300 hover:text-white hover:border-teal-400/40'
                     }`}
                   >
-                    {c.title}
+                    <img
+                      src={resolveThumbnailUrl(c.thumbnailUrl)}
+                      alt={c.title}
+                      className="w-12 h-10 rounded-lg object-cover shrink-0 border border-white/10"
+                    />
+                    <div className="flex-1 min-w-0 pr-1">
+                      <div className={`text-xs font-bold truncate ${isSelected ? 'text-slate-950 font-black' : 'text-white group-hover:text-amber-300'}`}>
+                        {c.title}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px]">
+                        <span className={isSelected ? 'text-slate-900 font-semibold' : 'text-teal-400'}>
+                          {c.price || 'Free'}
+                        </span>
+                        <span className="text-slate-400">·</span>
+                        <span className={isSelected ? 'text-slate-800' : 'text-slate-400'}>
+                          {c.duration}
+                        </span>
+                        {isEnrolled && (
+                          <span className="text-[9px] font-bold text-emerald-950 bg-emerald-400 px-1 rounded ml-auto">
+                            Enrolled
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </button>
                 );
               })}
             </div>
-          )}
+          </div>
 
           {/* Main Grid: Details + Poster */}
           <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">

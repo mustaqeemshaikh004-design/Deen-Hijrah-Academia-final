@@ -197,141 +197,70 @@ export const InfiniteCourseMarquee: React.FC<InfiniteCourseMarqueeProps> = ({
             return (
               <div
                 key={`marquee-${course.id}-${idx}`}
-                className="w-[230px] sm:w-[250px] shrink-0 rounded-xl overflow-hidden academy-surface border border-slate-800/80 hover:border-teal-400/50 transition-all duration-300 flex flex-col justify-between group shadow-lg hover:shadow-xl hover:-translate-y-0.5 bg-[#061224]/95 backdrop-blur-md"
+                onClick={() => onViewCourseDetails(course)}
+                className="relative w-[220px] sm:w-[260px] md:w-[300px] aspect-[16/10] shrink-0 rounded-2xl overflow-hidden border-2 border-slate-800/80 hover:border-amber-400/80 transition-all duration-300 group shadow-xl hover:shadow-[0_10px_30px_rgba(250,204,21,0.25)] hover:scale-105 cursor-pointer bg-slate-950"
+                title={`${course.title} — Click to view details & enroll`}
               >
-                <div>
-                  {/* Compact Thumbnail with overlay badges */}
-                  <div
-                    onClick={() => onViewCourseDetails(course)}
-                    className="relative h-28 sm:h-32 overflow-hidden bg-slate-950 cursor-pointer"
+                {/* Course Thumbnail Image */}
+                <img
+                  src={resolveThumbnailUrl(course.thumbnailUrl)}
+                  alt={course.title}
+                  loading="lazy"
+                  decoding="async"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = ACADEMY_ASSETS.courseSeerah;
+                  }}
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                />
+
+                {/* Ambient vignette and darkening gradient */}
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/30 to-transparent group-hover:via-slate-950/15 transition-all" />
+
+                {/* Status Badge */}
+                <div className="absolute top-2.5 left-2.5 flex items-center gap-1 z-10">
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide flex items-center gap-1 shadow-lg backdrop-blur-md ${
+                      isLive
+                        ? 'bg-rose-500/90 text-white border border-rose-400/40'
+                        : isComingSoon
+                        ? 'bg-amber-400/95 text-slate-950 border border-amber-300'
+                        : 'bg-emerald-500/90 text-white border border-emerald-400/40'
+                    }`}
                   >
-                    <img
-                      src={resolveThumbnailUrl(course.thumbnailUrl)}
-                      alt={course.title}
-                      loading="lazy"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src = ACADEMY_ASSETS.courseSeerah;
-                      }}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#061224] via-[#061224]/20 to-transparent" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                    <span>
+                      {isLive
+                        ? 'Live'
+                        : isComingSoon
+                        ? 'Coming Soon'
+                        : 'Open'}
+                    </span>
+                  </span>
+                </div>
 
-                    {/* Status Badge */}
-                    <div className="absolute top-2 left-2 flex items-center gap-1">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold tracking-wide flex items-center gap-1 shadow-md backdrop-blur-md ${
-                          isLive
-                            ? 'bg-rose-500/90 text-white'
-                            : isComingSoon
-                            ? 'bg-amber-400/90 text-slate-950'
-                            : 'bg-emerald-500/90 text-white'
-                        }`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                        <span>
-                          {isLive
-                            ? 'Live'
-                            : isComingSoon
-                            ? 'Coming Soon'
-                            : 'Open'}
-                        </span>
-                      </span>
-                    </div>
+                {/* Course Price / Duration Pill */}
+                <div className="absolute top-2.5 right-2.5 z-10">
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono-tabular font-bold bg-slate-950/80 text-teal-300 border border-teal-500/30 backdrop-blur-sm shadow">
+                    {course.price || 'Free'}
+                  </span>
+                </div>
 
-                    <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between text-[10px] text-teal-300 font-mono-tabular">
-                      <span className="bg-slate-950/80 px-1.5 py-0.5 rounded backdrop-blur-sm border border-slate-800">
-                        {course.duration}
-                      </span>
-                      <span className="bg-slate-950/80 px-1.5 py-0.5 rounded font-bold text-white backdrop-blur-sm border border-slate-800">
-                        {course.price || 'Free'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Body Content - Sleek & Compact */}
-                  <div className="p-3 space-y-2">
-                    <div className="flex items-center justify-between text-[10px] text-teal-400 font-medium">
-                      <span className="truncate max-w-[100px]">{course.category}</span>
-                      <span className="text-slate-400 truncate max-w-[100px]">
-                        {course.instructorName}
-                      </span>
-                    </div>
-
-                    <h3
-                      onClick={() => onViewCourseDetails(course)}
-                      className="font-display text-xs sm:text-sm font-bold text-white hover:text-teal-300 transition-colors cursor-pointer line-clamp-1"
-                      title={course.title}
-                    >
-                      {course.title}
-                    </h3>
-
-                    <p className="text-[10.5px] academy-text-secondary line-clamp-1 leading-normal">
-                      {course.description}
-                    </p>
-
-                    {/* Converted Local Timezone Schedule */}
-                    <div className="flex items-center gap-1 text-[9.5px] text-teal-300 font-mono-tabular bg-teal-950/30 px-2 py-1 rounded border border-teal-500/20">
-                      <Globe className="w-3 h-3 shrink-0 text-teal-400" />
-                      <span className="truncate">
-                        {course.classDays || 'Sat & Wed'} · {convertedClassTime.formattedLocalTime}
-                      </span>
-                    </div>
-
-                    {/* Student Capacity Progress Bar */}
-                    <div className="space-y-1 text-[9.5px] font-mono-tabular">
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1 academy-text-secondary">
-                          <Users className="w-2.5 h-2.5 text-teal-400" />
-                          <span>{studentsTaken}/{maxStudents}</span>
-                        </span>
-                        <span className={isCourseFull ? 'text-rose-400 font-bold' : 'text-teal-400'}>
-                          {enrollmentRate}%
-                        </span>
-                      </div>
-                      <div className="w-full h-1 rounded-full bg-slate-800 overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-500 ${
-                            isCourseFull ? 'bg-rose-500' : 'bg-teal-400'
-                          }`}
-                          style={{ width: `${enrollmentRate}%` }}
-                        />
-                      </div>
-                    </div>
+                {/* Floating Title on bottom edge */}
+                <div className="absolute bottom-0 inset-x-0 p-3 z-10 space-y-0.5">
+                  <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-amber-300 transition-colors line-clamp-1 drop-shadow-md">
+                    {course.title}
+                  </h4>
+                  <div className="flex items-center justify-between text-[10px] text-slate-300">
+                    <span className="text-teal-400 truncate max-w-[140px]">{course.category}</span>
+                    <span className="text-slate-400 font-mono-tabular">{course.duration}</span>
                   </div>
                 </div>
 
-                {/* Footer Buttons */}
-                <div className="p-3 pt-0 space-y-1.5">
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => onWatchCourse(course)}
-                      className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all cursor-pointer whitespace-nowrap"
-                    >
-                      <Play className="w-3 h-3 fill-current" />
-                      <span>Watch ({courseLessons.length})</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => onViewCourseDetails(course)}
-                      className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-[10px] font-semibold academy-elevated hover:border-teal-400 text-teal-300 transition-all cursor-pointer whitespace-nowrap"
-                    >
-                      <BookOpen className="w-3 h-3" />
-                      <span>Details</span>
-                    </button>
+                {/* Hover Play / View Overlay Icon */}
+                <div className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/30 backdrop-blur-[1px]">
+                  <div className="w-11 h-11 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shadow-2xl transform scale-75 group-hover:scale-100 transition-transform">
+                    <Play className="w-4 h-4 fill-current ml-0.5" />
                   </div>
-
-                  {!isEnrolled && !isComingSoon && !isCourseFull && (
-                    <button
-                      type="button"
-                      onClick={() => onEnrollCourse(course)}
-                      className="w-full flex items-center justify-center gap-1 py-1.5 px-2.5 rounded-lg text-[10.5px] font-bold bg-teal-400 text-slate-950 hover:bg-teal-300 shadow transition-all cursor-pointer"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      <span>Enroll ({course.price || 'Free'})</span>
-                    </button>
-                  )}
                 </div>
               </div>
             );

@@ -25,6 +25,8 @@ import {
   ShieldCheck,
   ThumbsUp,
   ThumbsDown,
+  GraduationCap,
+  ArrowRight,
 } from 'lucide-react';
 import { getZoomEventDetails, safeOpenLink } from '../lib/zoomService.ts';
 import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
@@ -580,53 +582,83 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
       </div>
 
-      {/* FIRST ON DASHBOARD: AUTOMATED COURSE ATTENDANCE SYSTEM (No self-marking, 10 min window rule) */}
-      <CourseAttendanceSection
-        studentId={profile?.id || profile?.uid || 'guest-scholar'}
-        studentName={profile?.fullName || 'Scholar'}
-        courses={enrolledCourses.length > 0 ? enrolledCourses : courses.slice(0, 2)}
-        events={events}
-        selectedTimezone={selectedTimezone}
-        onJoinZoomMeeting={(ev, c) => {
-          if (ev?.zoomJoinUrl) {
-            safeOpenLink(ev.zoomJoinUrl);
-          } else {
-            onWatchCourse(c);
-          }
-        }}
-        onBrowseCourses={onBrowseCourses}
-      />
-
-      {/* VISUAL 'PATH OF KNOWLEDGE' PROGRESS ROADMAP */}
-      {(activeTab === 'overview' || activeTab === 'roadmap') && (
-        <div className="space-y-8">
-          <PathOfKnowledgeRoadmap
-            courses={courses}
-            lessons={lessons}
-            enrollments={myEnrollments}
-            enrolledCourseIds={enrolledCourseIds}
-            events={events}
-            homework={homework}
+      {/* Attendance & Roadmap: Only shown if student is enrolled in courses */}
+      {enrolledCourses.length > 0 && (
+        <>
+          {/* FIRST ON DASHBOARD: AUTOMATED COURSE ATTENDANCE SYSTEM (Enrolled Courses Only) */}
+          <CourseAttendanceSection
+            studentId={profile?.id || profile?.uid || 'guest-scholar'}
+            studentName={profile?.fullName || 'Scholar'}
+            courses={enrolledCourses}
+            events={events.filter((ev) => !ev.courseId || enrolledCourseIds.includes(ev.courseId))}
             selectedTimezone={selectedTimezone}
-            isAdmin={profile?.role === 'admin'}
-            onWatchCourse={onWatchCourse}
-            onEnrollCourse={onEnrollCourse}
-            onToggleLessonProgress={onToggleLessonProgress}
-            onOpenHomeworkForCourse={(courseId, lessonId) => {
-              setHwCourseId(courseId);
-              setHwLessonId(lessonId ? String(lessonId) : '');
-              setActiveTab('homework');
+            onJoinZoomMeeting={(ev, c) => {
+              if (ev?.zoomJoinUrl) {
+                safeOpenLink(ev.zoomJoinUrl);
+              } else {
+                onWatchCourse(c);
+              }
             }}
-            onOpenCalendarForCourse={(courseId) => {
-              setCalendarCourseFilter(courseId);
-              setActiveTab('calendar');
-            }}
+            onBrowseCourses={onBrowseCourses}
           />
-        </div>
+
+          {/* VISUAL 'PATH OF KNOWLEDGE' PROGRESS ROADMAP (Enrolled Courses Only) */}
+          {(activeTab === 'overview' || activeTab === 'roadmap') && (
+            <div className="space-y-8">
+              <PathOfKnowledgeRoadmap
+                courses={enrolledCourses}
+                lessons={lessons.filter((l) => enrolledCourseIds.includes(l.courseId))}
+                enrollments={myEnrollments}
+                enrolledCourseIds={enrolledCourseIds}
+                events={events.filter((ev) => !ev.courseId || enrolledCourseIds.includes(ev.courseId))}
+                homework={homework.filter((h) => enrolledCourseIds.includes(h.courseId))}
+                selectedTimezone={selectedTimezone}
+                isAdmin={profile?.role === 'admin'}
+                onWatchCourse={onWatchCourse}
+                onEnrollCourse={onEnrollCourse}
+                onToggleLessonProgress={onToggleLessonProgress}
+                onOpenHomeworkForCourse={(courseId, lessonId) => {
+                  setHwCourseId(courseId);
+                  setHwLessonId(lessonId ? String(lessonId) : '');
+                  setActiveTab('homework');
+                }}
+                onOpenCalendarForCourse={(courseId) => {
+                  setCalendarCourseFilter(courseId);
+                  setActiveTab('calendar');
+                }}
+              />
+            </div>
+          )}
+        </>
       )}
 
       {/* TAB 1: OVERVIEW (Teacher Announcements + Enrolled Courses + Daily Class Survey + Live Meetings) */}
       {activeTab === 'overview' && (
+        enrolledCourses.length === 0 ? (
+          <div className="py-20 px-6 text-center max-w-xl mx-auto space-y-6 academy-surface border border-slate-800 rounded-3xl p-10 shadow-2xl">
+            <div className="w-20 h-20 rounded-3xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center mx-auto text-teal-400 shadow-xl">
+              <GraduationCap className="w-10 h-10" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="font-display text-2xl sm:text-3xl font-bold text-white">
+                No Enrolled Courses
+              </h2>
+              <p className="text-sm text-slate-400 leading-relaxed max-w-md mx-auto">
+                You are not currently enrolled in any academic cohorts or programs. Once you enroll, your live Zoom classes, course recordings, syllabus modules, and assignments will appear here.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onBrowseCourses}
+                className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-2xl font-bold text-sm bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 text-slate-950 shadow-xl shadow-amber-400/25 hover:shadow-amber-400/40 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+              >
+                <span>Explore Courses &amp; Enroll</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="space-y-8">
           {/* TEACHER & ACADEMY ANNOUNCEMENTS */}
           {announcements.length > 0 && (
@@ -1101,6 +1133,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             )}
           </div>
         </div>
+        )
       )}
 
       {/* TAB: MY COURSES (Dedicated Courses List with View Details Modal & Syllabus) */}

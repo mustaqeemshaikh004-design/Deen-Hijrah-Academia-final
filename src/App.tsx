@@ -233,6 +233,16 @@ function AcademyPortalContent() {
     });
   }, []);
 
+  // Automatically pop up the admissions enrollment box right after the logo splash finishes
+  useEffect(() => {
+    if (!showSplash) {
+      const timer = setTimeout(() => {
+        setShowEnrollmentModalBox(true);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [showSplash]);
+
   const handleRefreshAll = async () => {
     await Promise.all([loadPortalData(), refreshProfileAndMessages()]);
   };
@@ -510,7 +520,13 @@ function AcademyPortalContent() {
       {/* First-Load Logo Splash Intro that transitions smoothly into the Homepage */}
       <AnimatePresence mode="wait">
         {showSplash && (
-          <SplashIntro key="splash-loader" onComplete={() => setShowSplash(false)} />
+          <SplashIntro
+            key="splash-loader"
+            onComplete={() => {
+              setShowSplash(false);
+              setShowEnrollmentModalBox(true);
+            }}
+          />
         )}
       </AnimatePresence>
 
@@ -535,7 +551,10 @@ function AcademyPortalContent() {
           activeView={activeView}
           onNavigate={(view) => handleNavigateWithLogo(view)}
           unreadCount={unreadCount}
-          onReplayIntro={() => setShowSplash(true)}
+          onReplayIntro={() => {
+            setShowEnrollmentModalBox(false);
+            setShowSplash(true);
+          }}
           onSignedInSuccess={async (signedInProfile) => {
             await handleRefreshAll();
             showToast(
@@ -549,7 +568,7 @@ function AcademyPortalContent() {
         <OpenEnrollmentHeroBanner
           isOpen={!showSplash && showEnrollmentModalBox}
           onClose={() => setShowEnrollmentModalBox(false)}
-          courses={publishedCourses}
+          courses={courses.length > 0 ? courses : publishedCourses}
           enrolledCourseIds={enrolledCourseIds}
           onStartEnroll={(c) => {
             setShowEnrollmentModalBox(false);

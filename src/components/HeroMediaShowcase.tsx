@@ -43,7 +43,7 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
   onOpenAdminSlides,
 }) => {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
 
   // Persistent mute state: restored from localStorage so user's unmute preference is saved
@@ -192,10 +192,12 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
   };
 
   const handlePrev = () => {
+    setIsAutoPlaying(false);
     setActiveIndex((prev) => (prev - 1 + activeSlides.length) % Math.max(1, activeSlides.length));
   };
 
   const handleNext = () => {
+    setIsAutoPlaying(false);
     setActiveIndex((prev) => (prev + 1) % Math.max(1, activeSlides.length));
   };
 
@@ -687,6 +689,7 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
                       key={slide.id}
                       type="button"
                       onClick={() => {
+                        setIsAutoPlaying(false);
                         setActiveIndex(idx);
                       }}
                       className={`text-left flex items-center gap-3 p-2.5 rounded-xl backdrop-blur-md transition-all border ${

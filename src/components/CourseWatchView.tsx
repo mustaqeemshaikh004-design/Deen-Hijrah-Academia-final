@@ -28,6 +28,9 @@ import {
   ChevronLeft,
   Film,
   Megaphone,
+  HelpCircle,
+  X,
+  AlertCircle,
 } from 'lucide-react';
 import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
 import { LessonThreadedComments } from './LessonThreadedComments.tsx';
@@ -294,6 +297,99 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
 
   const currentLesson =
     courseLessons.find((l) => l.id === selectedLessonId) || courseLessons[0] || null;
+
+  // Floating Ask Question Modal State (Direct Message to Course Instructor)
+  const [isAskModalOpen, setIsAskModalOpen] = useState(false);
+  const [questionLessonId, setQuestionLessonId] = useState<number | null>(null);
+  const [questionSubject, setQuestionSubject] = useState('');
+  const [questionBody, setQuestionBody] = useState('');
+  const [submittingQuestion, setSubmittingQuestion] = useState(false);
+  const [questionStatusMsg, setQuestionStatusMsg] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+
+  const handleOpenAskModal = (lessonId?: number | null) => {
+    const targetId =
+      lessonId !== undefined && lessonId !== null
+        ? lessonId
+        : currentLesson?.id || courseLessons[0]?.id || null;
+    setQuestionLessonId(targetId);
+    const targetLesson = courseLessons.find((l) => l.id === targetId);
+    setQuestionSubject(
+      targetLesson
+        ? `Clarification regarding Lesson ${targetLesson.positionOrder}: ${targetLesson.title}`
+        : `Question regarding ${course.title}`
+    );
+    setQuestionBody('');
+    setQuestionStatusMsg(null);
+    setIsAskModalOpen(true);
+  };
+
+  const handleSendQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!questionSubject.trim() || !questionBody.trim()) return;
+
+    setSubmittingQuestion(true);
+    setQuestionStatusMsg(null);
+
+    const targetLesson = courseLessons.find((l) => l.id === questionLessonId);
+    const lessonPrefix = targetLesson
+      ? `[Lesson ${targetLesson.positionOrder}: ${targetLesson.title}] `
+      : `[${course.title}] `;
+    const finalSubject = `${lessonPrefix}${questionSubject.trim()}`;
+
+    try {
+      const fetchFn = authFetch || smartApiFetch;
+      const res = await fetchFn('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receiverId: course.instructorId || 1,
+          subject: finalSubject,
+          body: questionBody.trim(),
+        }),
+      });
+
+      if (res.ok) {
+        setQuestionStatusMsg({
+          type: 'success',
+          text: `Your question has been sent directly to ${
+            course.instructorName || 'Mustaqeem Shaikh'
+          }! Replies will appear in your Student Inbox.`,
+        });
+        setTimeout(() => {
+          setIsAskModalOpen(false);
+          setQuestionBody('');
+          setQuestionStatusMsg(null);
+        }, 2200);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setQuestionStatusMsg({
+          type: 'error',
+          text: data.error || 'Failed to send message. Please ensure you are logged in.',
+        });
+      }
+    } catch (err: any) {
+      setQuestionStatusMsg({
+        type: 'error',
+        text: err.message || 'Network error while delivering your question.',
+      });
+    } finally {
+      setSubmittingQuestion(false);
+    }
+  };
+
+  // Close Ask Question Modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isAskModalOpen) {
+        setIsAskModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAskModalOpen]);
 
   const [resolvedVideoUrl, setResolvedVideoUrl] = useState<string>(currentLesson?.videoUrl || '');
 
@@ -2145,6 +2241,220 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Floating 'Ask Question' Button to send a direct message to Course Instructor */}
+      <div className="fixed bottom-6 right-6 z-40 sm:bottom-8 sm:right-8">
+        <motion.button
+          type="button"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => handleOpenAskModal(currentLesson?.id)}
+          className="group flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 text-slate-950 font-black text-xs sm:text-sm shadow-[0_12px_35px_rgba(250,204,21,0.35)] ring-2 ring-amber-400/70 hover:shadow-[0_18px_45px_rgba(250,204,21,0.55)] border border-amber-200 transition-all cursor-pointer"
+          title={`Ask ${course.instructorName || 'Instructor'} a question about ${
+            currentLesson ? currentLesson.title : 'this course'
+          }`}
+        >
+          <div className="w-8 h-8 rounded-xl bg-slate-950/15 flex items-center justify-center shrink-0 group-hover:rotate-12 transition-transform shadow-sm">
+            <HelpCircle className="w-5 h-5 stroke-[2.5]" />
+          </div>
+          <div className="flex flex-col text-left leading-tight">
+            <div className="flex items-center gap-1.5">
+              <span>Ask Question</span>
+              {currentLesson && (
+                <span className="text-[10px] bg-slate-950/20 px-1.5 py-0.2 rounded font-mono-tabular font-bold">
+                  L{currentLesson.positionOrder}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-semibold text-slate-900/80 tracking-normal hidden sm:inline">
+              To {course.instructorName || 'Instructor'}
+            </span>
+          </div>
+        </motion.button>
+      </div>
+
+      {/* Ask Question to Instructor Modal */}
+      <AnimatePresence>
+        {isAskModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (!submittingQuestion) setIsAskModalOpen(false);
+              }}
+              className="fixed inset-0 bg-black/80 backdrop-blur-md"
+            />
+
+            {/* Modal Dialog */}
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="ask-question-title"
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative z-10 w-full max-w-xl rounded-3xl bg-gradient-to-b from-[#091528] via-[#050C17] to-[#040A14] border-2 border-amber-400/60 p-6 sm:p-8 shadow-[0_20px_70px_rgba(0,0,0,0.85)] space-y-5 overflow-hidden text-white"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 shadow-lg shadow-amber-400/25">
+                    <HelpCircle className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h3
+                      id="ask-question-title"
+                      className="font-display text-lg sm:text-xl font-bold text-white"
+                    >
+                      Ask Instructor a Question
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Direct message to{' '}
+                      <span className="text-amber-300 font-semibold">
+                        {course.instructorName || 'Mustaqeem Shaikh'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAskModalOpen(false)}
+                  disabled={submittingQuestion}
+                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Close Modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Status Notice */}
+              {questionStatusMsg && (
+                <div
+                  className={`p-3.5 rounded-xl text-xs font-semibold flex items-start gap-2.5 ${
+                    questionStatusMsg.type === 'success'
+                      ? 'bg-emerald-500/15 border border-emerald-400/40 text-emerald-300'
+                      : 'bg-rose-500/15 border border-rose-400/40 text-rose-300'
+                  }`}
+                >
+                  {questionStatusMsg.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  )}
+                  <span>{questionStatusMsg.text}</span>
+                </div>
+              )}
+
+              {/* Form */}
+              <form onSubmit={handleSendQuestion} className="space-y-4">
+                {/* Specific Lesson Selector */}
+                <div>
+                  <label className="block text-xs font-semibold text-teal-300 mb-1.5">
+                    Specific Lesson Reference:
+                  </label>
+                  <select
+                    value={questionLessonId ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value ? Number(e.target.value) : null;
+                      setQuestionLessonId(val);
+                      const target = courseLessons.find((l) => l.id === val);
+                      if (target) {
+                        setQuestionSubject(
+                          `Clarification regarding Lesson ${target.positionOrder}: ${target.title}`
+                        );
+                      } else {
+                        setQuestionSubject(`Question regarding ${course.title}`);
+                      }
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-teal-500/30 text-xs text-white focus:outline-none focus:border-amber-400 cursor-pointer"
+                  >
+                    {courseLessons.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        Lesson {l.positionOrder}: {l.title} ({l.duration || 'Recording'})
+                      </option>
+                    ))}
+                    <option value="">General Course Discussion / Inquiry</option>
+                  </select>
+                </div>
+
+                {/* Subject */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Question Subject / Topic:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={questionSubject}
+                    onChange={(e) => setQuestionSubject(e.target.value)}
+                    placeholder="e.g. Question on historical context in Lesson 2..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-xs text-white focus:outline-none focus:border-amber-400 placeholder:text-slate-500"
+                  />
+                </div>
+
+                {/* Question Details */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Your Question for Faculty:
+                  </label>
+                  <textarea
+                    rows={4}
+                    required
+                    value={questionBody}
+                    onChange={(e) => setQuestionBody(e.target.value)}
+                    placeholder="Type your question or clarification request here. The faculty member will receive this directly and reply to your student inbox..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-xs text-white focus:outline-none focus:border-amber-400 placeholder:text-slate-500 resize-none leading-relaxed"
+                  />
+                </div>
+
+                {/* Instructor Info Box */}
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-900/60 border border-white/5 text-xs text-slate-400">
+                  <div className="w-8 h-8 rounded-full bg-teal-400/20 text-teal-300 flex items-center justify-center font-bold text-xs shrink-0">
+                    MS
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-slate-300 font-semibold">
+                      Recipient: {course.instructorName || 'Mustaqeem Shaikh'}
+                    </span>
+                    <span className="block text-[11px] text-slate-500">
+                      Replies will appear directly in your Student Inbox
+                    </span>
+                  </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAskModalOpen(false)}
+                    disabled={submittingQuestion}
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={
+                      submittingQuestion ||
+                      !questionSubject.trim() ||
+                      !questionBody.trim()
+                    }
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-300 text-slate-950 hover:scale-102 active:scale-98 transition-all shadow-lg shadow-amber-400/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{submittingQuestion ? 'Sending...' : 'Send to Instructor'}</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Fullscreen Interactive Animated PDF Reader Modal */}
       {activePdfModal && (
         <AnimatedPdfViewer

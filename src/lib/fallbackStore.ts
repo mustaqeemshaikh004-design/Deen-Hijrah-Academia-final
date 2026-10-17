@@ -494,7 +494,7 @@ function createDefaultStoreState(): PortalStoreState {
   };
 }
 
-function loadStore(): PortalStoreState {
+export function loadStore(): PortalStoreState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -536,29 +536,25 @@ function loadStore(): PortalStoreState {
 }
 
 function sanitizeStateForStorage(state: PortalStoreState): PortalStoreState {
-  const sanitizeString = (val?: string | null): string => {
-    if (!val) return '';
-    // Strip accidental huge base64 dataUrls exceeding 200KB from state before writing to localStorage
-    if (val.startsWith('data:') && val.length > 200000) {
-      return 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-    }
-    return val;
-  };
-
   return {
     ...state,
     lessons: (state.lessons || []).map((l) => ({
       ...l,
-      videoUrl: sanitizeString(l.videoUrl),
-      attachmentUrl: l.attachmentUrl ? sanitizeString(l.attachmentUrl) : null,
+      videoUrl: l.videoUrl || '',
+      attachmentUrl: l.attachmentUrl || null,
+      thumbnailUrl: l.thumbnailUrl || 'preset:seerah',
     })),
     courses: (state.courses || []).map((c) => ({
       ...c,
-      syllabusFileUrl: c.syllabusFileUrl ? sanitizeString(c.syllabusFileUrl) : null,
+      syllabusFileUrl: c.syllabusFileUrl || null,
+      thumbnailUrl: c.thumbnailUrl || 'preset:seerah',
+      syllabusText: c.syllabusText || null,
+      syllabusBoxes: c.syllabusBoxes || '[]',
     })),
     slides: (state.slides || []).map((s) => ({
       ...s,
-      videoUrl: s.videoUrl ? sanitizeString(s.videoUrl) : null,
+      videoUrl: s.videoUrl || null,
+      thumbnailUrl: s.thumbnailUrl || 'preset:hero_academy',
     })),
   };
 }
