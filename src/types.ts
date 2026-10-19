@@ -253,3 +253,64 @@ export interface CourseAttendanceRecord {
   status: 'present' | 'absent' | 'late';
   joinedAt?: string;
 }
+
+export interface HomeworkAssignment {
+  id: number;
+  courseId: number;
+  lessonId?: number | null;
+  instructorId: number;
+  instructorName: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  maxPoints: number;
+  attachmentUrl?: string | null;
+  rubric?: string | null;
+  createdAt: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  prompt: string;
+  type: 'multiple_choice' | 'true_false' | 'short_answer';
+  options?: string[];
+  correctOptionIndex?: number;
+  correctAnswerText?: string;
+  explanation: string;
+  points: number;
+}
+
+export interface Quiz {
+  id: number;
+  courseId: number;
+  lessonId?: number | null;
+  instructorId: number;
+  instructorName: string;
+  title: string;
+  description: string;
+  timeLimitMinutes: number; // 0 for untimed
+  passingScore: number; // percentage e.g. 70
+  badgeReward?: string | null;
+  questions: QuizQuestion[];
+  createdAt: string;
+}
+
+export interface QuizAttempt {
+  id: number;
+  quizId: number;
+  quizTitle: string;
+  studentId: number;
+  studentName: string;
+  studentEmail: string;
+  courseId: number;
+  score: number; // percentage (0-100)
+  totalPointsScored: number;
+  maxPoints: number;
+  passed: boolean;
+  answers: Record<string, any>;
+  assessmentFeedback?: string | null;
+  assessedBy?: string | null;
+  assessmentStatus: 'evaluated' | 'pending_review' | 'certified';
+  badgeAwarded?: string | null;
+  completedAt: string;
+}

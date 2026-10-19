@@ -14,6 +14,9 @@ import {
   ClassSurvey,
   StudentArticle,
   CourseAttendanceRecord,
+  HomeworkAssignment,
+  Quiz,
+  QuizAttempt,
 } from '../types.ts';
 
 const STORAGE_KEY = 'deen_hijrah_portal_store_v1';
@@ -27,6 +30,9 @@ interface PortalStoreState {
   enrollments: Enrollment[];
   messages: Message[];
   homework: HomeworkSubmission[];
+  assignments?: HomeworkAssignment[];
+  quizzes?: Quiz[];
+  quizAttempts?: QuizAttempt[];
   comments?: LessonComment[];
   announcements?: Announcement[];
   roleApplications?: RoleApplication[];
@@ -491,6 +497,219 @@ function createDefaultStoreState(): PortalStoreState {
     classSurveys: [],
     media: {},
     calendarSettings: defaultCalendarSettings,
+    assignments: [
+      {
+        id: 1,
+        courseId: 1,
+        lessonId: 1,
+        instructorId: 1,
+        instructorName: 'Mustaqeem Shaikh',
+        title: 'Module 1: Pre-Islamic Arabian Epigraphy & Socio-Political Folio',
+        description: 'Synthesize the socio-economic treaty between Quraysh and surrounding tribes prior to the Bi\'thah (call to prophethood). Cite at least two classical chronicles (Ibn Hisham or Tabari) and submit a 2-page reflection.',
+        dueDate: formatRelativeDate(7),
+        maxPoints: 100,
+        attachmentUrl: null,
+        rubric: 'Historical Accuracy (40pts), Critical Synthesis of Primary Arabic Sources (40pts), Clarity of Academic Expression (20pts).',
+        createdAt: new Date(Date.now() - 172800000).toISOString(),
+      },
+      {
+        id: 2,
+        courseId: 2,
+        lessonId: 2,
+        instructorId: 1,
+        instructorName: 'Mustaqeem Shaikh',
+        title: 'Nahw Drill: Morpho-Syntactic Analysis of Surah Al-Mulk Verses 1-5',
+        description: 'Provide an exhaustive I\'rab (grammatical parsing) of the opening verses of Surah Al-Mulk, identifying all Marfu\'at, Mansubat, and Majrurat terms along with verb conjugation patterns.',
+        dueDate: formatRelativeDate(10),
+        maxPoints: 100,
+        attachmentUrl: null,
+        rubric: 'Grammatical Accuracy of I\'rab (50pts), Morphological Identification of Awzan (30pts), Presentation & Orthography (20pts).',
+        createdAt: new Date(Date.now() - 86400000).toISOString(),
+      },
+    ],
+    quizzes: [
+      {
+        id: 1,
+        courseId: 1,
+        lessonId: 1,
+        instructorId: 1,
+        instructorName: 'Mustaqeem Shaikh',
+        title: 'Seerah Core Assessment: Meccan Epoch & Prophetic Lineage',
+        description: 'Interactive milestone quiz evaluating foundational knowledge of the pre-Islamic Arabian context, the Year of the Elephant, Hilf al-Fudul, and the early revelation at Cave Hira.',
+        timeLimitMinutes: 10,
+        passingScore: 70,
+        badgeReward: 'Certified Seerah Historiographer',
+        createdAt: new Date(Date.now() - 259200000).toISOString(),
+        questions: [
+          {
+            id: 'q1',
+            prompt: 'Which historic pact, initiated before the prophetic mission, did the Prophet Muhammad (ﷺ) praise and state he would readily uphold even in Islam due to its defense of the oppressed?',
+            type: 'multiple_choice',
+            options: [
+              'Hilf al-Fudul (Pact of the Virtuous)',
+              'Hilf al-Mutayyabin (Pact of the Perfumed)',
+              'Treaty of Hudaybiyyah',
+              'Pact of Aqabah',
+            ],
+            correctOptionIndex: 0,
+            explanation: 'Hilf al-Fudul was formed to defend any victim of injustice in Mecca, native or stranger. The Prophet (ﷺ) praised its noble ethos throughout his life.',
+            points: 25,
+          },
+          {
+            id: 'q2',
+            prompt: 'In which year did the expedition of Abrahah with his elephant force toward the Kaaba take place, coinciding with the birth year of the Prophet Muhammad (ﷺ)?',
+            type: 'multiple_choice',
+            options: [
+              '570 CE (Am al-Fil)',
+              '610 CE (Year of Revelation)',
+              '622 CE (Year of Hijrah)',
+              '595 CE',
+            ],
+            correctOptionIndex: 0,
+            explanation: 'The Year of the Elephant (Am al-Fil) corresponds to approximately 570 CE, the year our Master Muhammad (ﷺ) was born in Mecca.',
+            points: 25,
+          },
+          {
+            id: 'q3',
+            prompt: 'True or False: The boycott against Banu Hashim and Banu al-Muttalib confined the early Muslims in the Shi’b (ravine) of Abu Talib for approximately three rigorous years.',
+            type: 'true_false',
+            options: ['True', 'False'],
+            correctOptionIndex: 0,
+            explanation: 'True. The severe economic and social embargo enacted by the Quraysh lasted from the 7th year of prophethood until the 10th year.',
+            points: 25,
+          },
+          {
+            id: 'q4',
+            prompt: 'Which beloved foster mother nurtured the Prophet (ﷺ) in the desert of the Banu Sa\'d tribe according to Arab nobility customs?',
+            type: 'multiple_choice',
+            options: [
+              'Halimah al-Sa\'diyyah',
+              'Barakah (Umm Ayman)',
+              'Thuwaybah',
+              'Fatimah bint Asad',
+            ],
+            correctOptionIndex: 0,
+            explanation: 'Halimah al-Sa\'diyyah nurtured the Prophet (ﷺ) during his early childhood in the tranquil environment of the Banu Sa\'d desert.',
+            points: 25,
+          },
+        ],
+      },
+      {
+        id: 2,
+        courseId: 2,
+        lessonId: 2,
+        instructorId: 1,
+        instructorName: 'Mustaqeem Shaikh',
+        title: 'Classical Arabic Syntactic Drill: Ism, Fi\'l, and Harf Classification',
+        description: 'Fast-paced grammar quiz testing your mastery of sentence components, declension indicators (I\'rab), and the three fundamental parts of classical Arabic speech.',
+        timeLimitMinutes: 8,
+        passingScore: 75,
+        badgeReward: 'Master of Arabic Syntax (Nahw)',
+        createdAt: new Date(Date.now() - 172800000).toISOString(),
+        questions: [
+          {
+            id: 'q2_1',
+            prompt: 'In classical Arabic grammar (Nahw), what are the three foundational parts of speech (Aqsam al-Kalam)?',
+            type: 'multiple_choice',
+            options: [
+              'Ism (Noun), Fi\'l (Verb), and Harf (Particle)',
+              'Mubtada, Khabar, and Fa\'il',
+              'Madi, Mudari\', and Amr',
+              'Marfu\', Mansub, and Majrur',
+            ],
+            correctOptionIndex: 0,
+            explanation: 'All classical Arabic speech is systematically categorized into Ism (Noun/adjective), Fi\'l (Verb), and Harf (Particle with meaning in other words).',
+            points: 25,
+          },
+          {
+            id: 'q2_2',
+            prompt: 'Which morphological marker is unique to an Ism (noun) and can never be accepted by a Fi\'l (verb)?',
+            type: 'multiple_choice',
+            options: [
+              'Tanwin and entering of Alif-Lam (Al-)',
+              'Sukun at the end of the root',
+              'Prefixing of "Qad" (قد)',
+              'Accepting feminine Ta at the end',
+            ],
+            correctOptionIndex: 0,
+            explanation: 'Tanwin (nunation), accepting Al- (definite article), and Khafd/Jarr (genitive case) are exclusive characteristics of nouns (Al-Ism).',
+            points: 25,
+          },
+          {
+            id: 'q2_3',
+            prompt: 'True or False: The default grammatical state (I\'rab) of the Doer of an action (Al-Fa\'il) in a verbal sentence is Marfu\' (nominative case).',
+            type: 'true_false',
+            options: ['True', 'False'],
+            correctOptionIndex: 0,
+            explanation: 'True. The Fa\'il (agent/subject) of a verb is always Marfu\', typically designated by a Dammah on the final letter.',
+            points: 25,
+          },
+          {
+            id: 'q2_4',
+            prompt: 'What does the term "Mabni" (مبني) mean in classical grammatical science?',
+            type: 'multiple_choice',
+            options: [
+              'An indeclinable word whose ending remains fixed regardless of its syntactic governor',
+              'A fully declined word that accepts all three vowel endings',
+              'A defective verb ending with a weak letter',
+              'A derived adjective expressing intense emotion',
+            ],
+            correctOptionIndex: 0,
+            explanation: 'Mabni denotes an indeclinable word whose vocalic termination remains constant, unlike Mu\'rab words which change based on governing agents (Awamil).',
+            points: 25,
+          },
+        ],
+      },
+    ],
+    quizAttempts: [],
+    articles: [
+      {
+        id: 1,
+        studentId: 2,
+        authorName: 'Ahmad Mansoor',
+        authorEmail: 'ahmad.mansoor@deenhijrah.edu',
+        authorRole: 'student',
+        title: 'The Sociological Impact of Hilf al-Fudul: A Moral Blueprint for Modern Civic Ethics',
+        category: 'Seerah & History',
+        abstract: 'An investigation into the pre-prophetic civic coalition known as Hilf al-Fudul, examining how timeless principles of universal justice and defending the vulnerable translate into contemporary communal initiatives.',
+        content: `### Introduction\n\nCenturies prior to contemporary declarations of civil rights, the dry valley of Mecca witnessed an extraordinary covenant founded entirely upon the raw instinct of natural justice. Initiated after an injustice dealt against an outsider merchant by the Quraysh chieftain Al-'As ibn Wa'il, the tribal heads gathered in the residence of Abdullah ibn Jud'an.\n\n### The Oath of Universal Justice\n\nThey dipped their hands in scented water, facing the sacred Kaaba, and pledged that never would an oppressed individual—whether native to the sanctuary or an unshielded visitor—suffer tyranny without the united assembly standing beside them until restitution was delivered.\n\nDecades later, during the zenith of the Islamic commonwealth in Medina, the Messenger of Allah (ﷺ) reflected:\n\n> *"I witnessed in the house of Ibn Jud'an a covenant which was dearer to me than a herd of red camels; and if I were summoned to uphold it in Islam, I would certainly respond."*\n\n### Modern Implications for Muslim Scholars\n\n1. **Transcending Tribal Insularity:** Hilf al-Fudul established that moral duty transcends kinship and factional loyalty.\n2. **Defending the Stranger:** True ethical character is tested by how a society treats the traveler without political leverage.\n3. **Civic Coexistence:** Moral coalitions between communities of goodwill form the foundation of peaceful coexistence.`,
+        attachmentUrl: null,
+        readTime: '6 min read',
+        published: true,
+        createdAt: new Date(Date.now() - 259200000).toISOString().split('T')[0],
+      },
+      {
+        id: 2,
+        studentId: 3,
+        authorName: 'Fatima Al-Zahra Rahman',
+        authorEmail: 'fatima.rahman@deenhijrah.edu',
+        authorRole: 'student',
+        title: 'The Architecture of Arabic Balagha: How Verb Morphology Shapes Quranic Rhetoric',
+        category: 'Classical Arabic & Balagha',
+        abstract: 'How minute shifts in verb forms (Awzan) produce monumental theological and rhetorical precision throughout the Quranic discourse, with particular reference to Surah Al-Kahf and Surah Maryam.',
+        content: `### The Genius of Arabic Morpho-Phonetics\n\nIn classical Arabic linguistics, the principle formulated by master grammarians states: *"Ziyadat al-Mabna tadullu 'ala Ziyadat al-Ma'na"* (An increase in the structural form of a word indicates an increase or intensification in its meaning).\n\n### Case Study: Istata'a vs. Ista'a in Surah Al-Kahf\n\nIn the epic narrative of Musa (Moses) and Al-Khidr (peace be upon them) in Surah Al-Kahf, we witness an exquisite demonstration of this morphological nuance:\n\n- When the events were heavy, mysterious, and emotionally unendurable for Musa, the heavier phonological form is utilized: **فَمَا اسْطَاعُوا أَن يَظْهَرُوهُ وَمَا اسْتَطَاعُوا لَهُ نَقْبًا** (*“Yet they were unable [istata'u] to pierce it”*).\n- However, once Al-Khidr unravels the divine wisdom and lifts the burden of perplexity from Musa's heart, the text shifts to the lighter, contracted verb form: **ذَٰلِكَ تَأْوِيلُ مَا لَمْ تَسْطِع عَّلَيْهِ صَبْرًا** (*“That is the interpretation of that over which you were unable [tasti'] to maintain patience”*).\n\n### Conclusion\n\nStudying classical Arabic under qualified faculty unveils that not a single vowel, prefix, or elongation in the sacred text is accidental. It is a living linguistic architecture calibrated for the human soul.`,
+        attachmentUrl: null,
+        readTime: '7 min read',
+        published: true,
+        createdAt: new Date(Date.now() - 172800000).toISOString().split('T')[0],
+      },
+      {
+        id: 3,
+        studentId: 4,
+        authorName: 'Zayd Al-Ansari',
+        authorEmail: 'zayd.ansari@deenhijrah.edu',
+        authorRole: 'student',
+        title: 'Digital Classrooms, Sacred Intentions: Navigating Live Online Madrassa Education',
+        category: 'Student Academy Experience',
+        abstract: 'Practical advice and spiritual etiquette (Adab al-Talib) for 21st-century online students studying classical Islamic sciences through live Zoom lectures, interactive calendars, and digital portfolios.',
+        content: `### The Sanctity of the Virtual Gathering\n\nWhen we click "Join Live Seminar" on our modern laptops, it can be easy to treat our screen like another media stream. Yet the great Imam Al-Zarnuji in *Ta'lim al-Muta'allim* teaches that knowledge is a spiritual light bestowed upon a reverent heart.\n\n### Five Etiquettes for the Digital Talib al-'Ilm\n\n1. **Wudu Before Logging On:** Approach your study space in ritual purity, keeping a clean notebook and designated stylus.\n2. **Camera Discipline & Active Presence:** Sit upright as if facing your teacher in a classical mosque courtyard.\n3. **Punctual Attendance:** Log into the waiting room five minutes before the scheduled time.\n4. **Structured Note-Taking:** Do not merely rely on video recordings; write with your own hand to engrave knowledge onto memory.\n5. **Supplication for the Teacher:** Begin every class by praying for your instructors, scholars, and fellow cohort peers.`,
+        attachmentUrl: null,
+        readTime: '5 min read',
+        published: true,
+        createdAt: new Date(Date.now() - 86400000).toISOString().split('T')[0],
+      },
+    ],
+    attendance: [],
   };
 }
 
@@ -519,10 +738,15 @@ export function loadStore(): PortalStoreState {
         enrollments: Array.isArray(parsed.enrollments) ? parsed.enrollments : defaults.enrollments,
         messages: Array.isArray(parsed.messages) ? parsed.messages : defaults.messages,
         homework: Array.isArray(parsed.homework) ? parsed.homework : defaults.homework,
+        assignments: Array.isArray(parsed.assignments) && parsed.assignments.length > 0 ? parsed.assignments : defaults.assignments,
+        quizzes: Array.isArray(parsed.quizzes) && parsed.quizzes.length > 0 ? parsed.quizzes : defaults.quizzes,
+        quizAttempts: Array.isArray(parsed.quizAttempts) ? parsed.quizAttempts : defaults.quizAttempts,
         comments: Array.isArray(parsed.comments) ? parsed.comments : defaults.comments,
         announcements: Array.isArray(parsed.announcements) ? parsed.announcements : defaults.announcements,
         roleApplications: Array.isArray(parsed.roleApplications) ? parsed.roleApplications : defaults.roleApplications,
         classSurveys: Array.isArray(parsed.classSurveys) ? parsed.classSurveys : defaults.classSurveys,
+        articles: Array.isArray(parsed.articles) && parsed.articles.length > 0 ? parsed.articles : defaults.articles,
+        attendance: Array.isArray(parsed.attendance) ? parsed.attendance : defaults.attendance,
         media: parsed.media || {},
         calendarSettings: parsed.calendarSettings || defaults.calendarSettings,
       };
@@ -549,13 +773,17 @@ function sanitizeStateForStorage(state: PortalStoreState): PortalStoreState {
       syllabusFileUrl: c.syllabusFileUrl || null,
       thumbnailUrl: c.thumbnailUrl || 'preset:seerah',
       syllabusText: c.syllabusText || null,
-      syllabusBoxes: c.syllabusBoxes || '[]',
+      syllabusBoxes: typeof c.syllabusBoxes === 'string' ? c.syllabusBoxes : JSON.stringify(c.syllabusBoxes || []),
     })),
     slides: (state.slides || []).map((s) => ({
       ...s,
       videoUrl: s.videoUrl || null,
       thumbnailUrl: s.thumbnailUrl || 'preset:hero_academy',
     })),
+    assignments: state.assignments || [],
+    quizzes: state.quizzes || [],
+    quizAttempts: state.quizAttempts || [],
+    articles: state.articles || [],
   };
 }
 
@@ -1696,6 +1924,189 @@ export async function handleLocalFallbackRequest(
         (r) => (!studentId || r.studentId === studentId) && (!courseId || r.courseId === courseId)
       );
       return jsonResponse(records);
+    }
+  }
+
+  // 25. Teacher/Admin Assigned Homework
+  if (pathOnly === '/api/assignments') {
+    if (method === 'GET') {
+      const courseId = Number(new URL(url, 'http://localhost').searchParams.get('courseId'));
+      const list = (store.assignments || []).filter((a) => !courseId || a.courseId === courseId);
+      return jsonResponse(list);
+    }
+  }
+
+  if (pathOnly === '/api/admin/assignments' && method === 'POST') {
+    if (!store.assignments) store.assignments = [];
+    const nextId = store.assignments.reduce((max, a) => Math.max(max, a.id), 0) + 1;
+    const item: HomeworkAssignment = {
+      id: nextId,
+      courseId: Number(body.courseId),
+      lessonId: body.lessonId ? Number(body.lessonId) : null,
+      instructorId: Number(body.instructorId || 1),
+      instructorName: String(body.instructorName || 'Mustaqeem Shaikh'),
+      title: String(body.title || 'Homework Assignment'),
+      description: String(body.description || ''),
+      dueDate: String(body.dueDate || formatRelativeDate(7)),
+      maxPoints: Number(body.maxPoints || 100),
+      attachmentUrl: body.attachmentUrl ? String(body.attachmentUrl) : null,
+      rubric: body.rubric ? String(body.rubric) : null,
+      createdAt: new Date().toISOString(),
+    };
+    store.assignments.unshift(item);
+    saveStore(store);
+    return jsonResponse(item);
+  }
+
+  const assignmentDeleteMatch = pathOnly.match(/^\/api\/admin\/assignments\/(\d+)$/);
+  if (assignmentDeleteMatch && method === 'DELETE') {
+    const id = Number(assignmentDeleteMatch[1]);
+    if (store.assignments) {
+      store.assignments = store.assignments.filter((a) => a.id !== id);
+      saveStore(store);
+    }
+    return jsonResponse({ success: true, id });
+  }
+
+  // 26. Quizzes & Assessments CRUD
+  if (pathOnly === '/api/quizzes') {
+    if (method === 'GET') {
+      const courseId = Number(new URL(url, 'http://localhost').searchParams.get('courseId'));
+      const list = (store.quizzes || []).filter((q) => !courseId || q.courseId === courseId);
+      return jsonResponse(list);
+    }
+  }
+
+  if (pathOnly === '/api/admin/quizzes' && method === 'POST') {
+    if (!store.quizzes) store.quizzes = [];
+    const nextId = store.quizzes.reduce((max, q) => Math.max(max, q.id), 0) + 1;
+    const quiz: Quiz = {
+      id: nextId,
+      courseId: Number(body.courseId),
+      lessonId: body.lessonId ? Number(body.lessonId) : null,
+      instructorId: Number(body.instructorId || 1),
+      instructorName: String(body.instructorName || 'Mustaqeem Shaikh'),
+      title: String(body.title || 'New Course Quiz'),
+      description: String(body.description || ''),
+      timeLimitMinutes: Number(body.timeLimitMinutes || 10),
+      passingScore: Number(body.passingScore || 70),
+      badgeReward: body.badgeReward ? String(body.badgeReward) : 'Course Scholar',
+      questions: Array.isArray(body.questions) ? body.questions : [],
+      createdAt: new Date().toISOString(),
+    };
+    store.quizzes.unshift(quiz);
+    saveStore(store);
+    return jsonResponse(quiz);
+  }
+
+  const quizMatch = pathOnly.match(/^\/api\/admin\/quizzes\/(\d+)$/);
+  if (quizMatch && method === 'PUT') {
+    const quizId = Number(quizMatch[1]);
+    if (!store.quizzes) store.quizzes = [];
+    const idx = store.quizzes.findIndex((q) => q.id === quizId);
+    if (idx !== -1) {
+      store.quizzes[idx] = { ...store.quizzes[idx], ...body };
+      saveStore(store);
+      return jsonResponse(store.quizzes[idx]);
+    }
+  }
+  if (quizMatch && method === 'DELETE') {
+    const quizId = Number(quizMatch[1]);
+    if (store.quizzes) {
+      store.quizzes = store.quizzes.filter((q) => q.id !== quizId);
+      saveStore(store);
+    }
+    return jsonResponse({ success: true, id: quizId });
+  }
+
+  // 27. Quiz Attempts & Student Assessments
+  const attemptMatch = pathOnly.match(/^\/api\/quizzes\/(\d+)\/attempt$/);
+  if (attemptMatch && method === 'POST') {
+    const quizId = Number(attemptMatch[1]);
+    if (!store.quizAttempts) store.quizAttempts = [];
+    const targetQuiz = (store.quizzes || []).find((q) => q.id === quizId);
+    const nextId = store.quizAttempts.reduce((max, a) => Math.max(max, a.id), 0) + 1;
+    const currentProf = getOrCreateLocalProfile(
+      store,
+      identity?.uid || 'student-user',
+      identity?.email || 'student@deenhijrah.edu',
+      identity?.name
+    );
+
+    const questions = targetQuiz?.questions || [];
+    let earnedPoints = 0;
+    const totalPoints = questions.reduce((sum, q) => sum + (q.points || 25), 0) || 100;
+    const answers = body.answers || {};
+
+    questions.forEach((q) => {
+      const userAns = answers[q.id];
+      if (q.type === 'multiple_choice' || q.type === 'true_false') {
+        if (Number(userAns) === q.correctOptionIndex) {
+          earnedPoints += q.points || 25;
+        }
+      } else {
+        if (userAns && String(userAns).trim().length > 3) {
+          earnedPoints += q.points || 25;
+        }
+      }
+    });
+
+    const scorePct = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 100;
+    const passThreshold = targetQuiz?.passingScore || 70;
+    const isPassed = scorePct >= passThreshold;
+
+    const attempt: QuizAttempt = {
+      id: nextId,
+      quizId,
+      quizTitle: targetQuiz?.title || 'Academic Assessment',
+      studentId: currentProf.id,
+      studentName: currentProf.fullName,
+      studentEmail: currentProf.email,
+      courseId: targetQuiz?.courseId || 1,
+      score: scorePct,
+      totalPointsScored: earnedPoints,
+      maxPoints: totalPoints,
+      passed: isPassed,
+      answers,
+      assessmentFeedback: isPassed
+        ? 'MashaAllah! Passed assessment requirements with distinction.'
+        : 'Assessment needs review. Please revisit lecture recording folios.',
+      assessedBy: 'Mustaqeem Shaikh',
+      assessmentStatus: isPassed ? 'certified' : 'evaluated',
+      badgeAwarded: isPassed ? targetQuiz?.badgeReward || 'Scholar Certified' : null,
+      completedAt: new Date().toISOString(),
+    };
+
+    store.quizAttempts.unshift(attempt);
+    saveStore(store);
+    return jsonResponse(attempt);
+  }
+
+  if (pathOnly === '/api/quiz-attempts' || pathOnly === '/api/admin/quiz-attempts') {
+    if (method === 'GET') {
+      const studentId = Number(new URL(url, 'http://localhost').searchParams.get('studentId'));
+      const courseId = Number(new URL(url, 'http://localhost').searchParams.get('courseId'));
+      const list = (store.quizAttempts || []).filter(
+        (a) => (!studentId || a.studentId === studentId) && (!courseId || a.courseId === courseId)
+      );
+      return jsonResponse(list);
+    }
+  }
+
+  // 28. Teacher/Admin Give Assessments & Custom Grading
+  const gradeAssessmentMatch = pathOnly.match(/^\/api\/admin\/assessments\/(\d+)\/grade$/);
+  if (gradeAssessmentMatch && (method === 'PUT' || method === 'POST')) {
+    const attemptId = Number(gradeAssessmentMatch[1]);
+    if (!store.quizAttempts) store.quizAttempts = [];
+    const target = store.quizAttempts.find((a) => a.id === attemptId);
+    if (target) {
+      if (body.assessmentFeedback !== undefined) target.assessmentFeedback = body.assessmentFeedback;
+      if (body.assessmentStatus !== undefined) target.assessmentStatus = body.assessmentStatus;
+      if (body.score !== undefined) target.score = Number(body.score);
+      if (body.badgeAwarded !== undefined) target.badgeAwarded = body.badgeAwarded;
+      target.assessedBy = body.assessedBy || 'Mustaqeem Shaikh';
+      saveStore(store);
+      return jsonResponse(target);
     }
   }
 

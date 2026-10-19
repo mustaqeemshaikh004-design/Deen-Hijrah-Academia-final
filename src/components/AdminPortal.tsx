@@ -39,7 +39,10 @@ import {
   ChevronRight,
   ChevronLeft,
   Search,
+  Award,
+  HelpCircle,
 } from 'lucide-react';
+import { smartApiFetch } from '../lib/fallbackStore.ts';
 import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
 import { ZoomMeetingLauncherModal } from './ZoomMeetingLauncherModal.tsx';
 import {
@@ -60,6 +63,10 @@ import {
   Message,
   SyllabusBox,
   HomeworkSubmission,
+  HomeworkAssignment,
+  Quiz,
+  QuizQuestion,
+  QuizAttempt,
   Announcement,
   RoleApplication,
   ClassSurvey,
@@ -425,6 +432,82 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     Record<number, { status: string; grade: string; feedback: string }>
   >({});
 
+  // Homework, Quizzes & Assessments Studio State
+  const [hwStudioTab, setHwStudioTab] = useState<'submissions' | 'assign' | 'quizzes' | 'quiz_assessments'>('submissions');
+  const [assignedHomeworkList, setAssignedHomeworkList] = useState<HomeworkAssignment[]>([]);
+  const [quizList, setQuizList] = useState<Quiz[]>([]);
+  const [quizAttemptsList, setQuizAttemptsList] = useState<QuizAttempt[]>([]);
+  const [loadingHwStudio, setLoadingHwStudio] = useState(false);
+
+  // Assign Homework Form State
+  const [hwCourseId, setHwCourseId] = useState<number>(() => (isInstructor ? managedCourses[0]?.id : courses[0]?.id) || 1);
+  const [hwTitle, setHwTitle] = useState('');
+  const [hwDesc, setHwDesc] = useState('');
+  const [hwDueDate, setHwDueDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [hwMaxPoints, setHwMaxPoints] = useState<number>(100);
+  const [hwRubric, setHwRubric] = useState('Textual synthesis (50pts), Scholarly reflection (30pts), Precision (20pts).');
+  const [hwAttachmentUrl, setHwAttachmentUrl] = useState('');
+  const [isAssigningHw, setIsAssigningHw] = useState(false);
+
+  // Create Quiz Form State
+  const [newQuizCourseId, setNewQuizCourseId] = useState<number>(() => (isInstructor ? managedCourses[0]?.id : courses[0]?.id) || 1);
+  const [newQuizTitle, setNewQuizTitle] = useState('');
+  const [newQuizDesc, setNewQuizDesc] = useState('');
+  const [newQuizTimeLimit, setNewQuizTimeLimit] = useState<number>(10);
+  const [newQuizPassingScore, setNewQuizPassingScore] = useState<number>(70);
+  const [newQuizBadge, setNewQuizBadge] = useState('Certified Course Scholar');
+  const [newQuizQuestions, setNewQuizQuestions] = useState<QuizQuestion[]>([]);
+
+  // Draft Question Builder State
+  const [draftPrompt, setDraftPrompt] = useState('');
+  const [draftType, setDraftType] = useState<'multiple_choice' | 'true_false' | 'short_answer'>('multiple_choice');
+  const [draftOptionA, setDraftOptionA] = useState('');
+  const [draftOptionB, setDraftOptionB] = useState('');
+  const [draftOptionC, setDraftOptionC] = useState('');
+  const [draftOptionD, setDraftOptionD] = useState('');
+  const [draftCorrectIndex, setDraftCorrectIndex] = useState<number>(0);
+  const [draftExplanation, setDraftExplanation] = useState('');
+  const [draftPoints, setDraftPoints] = useState<number>(25);
+  const [isCreatingQuiz, setIsCreatingQuiz] = useState(false);
+
+  // Load Homework Studio data (assignments, quizzes, attempts)
+  const loadHwStudioData = async () => {
+    try {
+      setLoadingHwStudio(true);
+      const [assRes, quizRes, attRes] = await Promise.all([
+        smartApiFetch('/api/assignments'),
+        smartApiFetch('/api/quizzes'),
+        smartApiFetch('/api/quiz-attempts'),
+      ]);
+      if (assRes.ok) {
+        const d = await assRes.json();
+        if (Array.isArray(d)) setAssignedHomeworkList(d);
+      }
+      if (quizRes.ok) {
+        const d = await quizRes.json();
+        if (Array.isArray(d)) setQuizList(d);
+      }
+      if (attRes.ok) {
+        const d = await attRes.json();
+        if (Array.isArray(d)) setQuizAttemptsList(d);
+      }
+    } catch (e) {
+      console.warn('Failed to load homework studio data:', e);
+    } finally {
+      setLoadingHwStudio(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeModule === 'homework') {
+      loadHwStudioData();
+    }
+  }, [activeModule]);
+
   // Manual Enrollment & Faculty Avatar State
   const [enrollStudentId, setEnrollStudentId] = useState<number>(profiles[0]?.id || 1);
   const [enrollCourseId, setEnrollCourseId] = useState<number>(courses[0]?.id || 0);
@@ -728,6 +811,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       setEditingLessonId(null);
       setLessonTitle('');
       setLessonDesc('');
+      setLessonVideoUrl('');
+      setResolvedLessonVideoUrl('');
+      setLessonAttachment('');
+      setLessonThumb('preset:seerah');
+      setLessonDuration('45:00');
+      setLessonScheduledDate('');
       await onRefreshData();
       showNotice(
         editingLessonId
@@ -849,6 +938,171 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       setSlideSubtitle('');
       await onRefreshData();
       showNotice('Homepage media slide saved.');
+    }
+  };
+
+  const handleAssignHomework = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!hwTitle.trim() || !hwCourseId) {
+      showNotice('Please provide a Homework Title and Course.');
+      return;
+    }
+    try {
+      setIsAssigningHw(true);
+      const parentCourse = courses.find((c) => c.id === Number(hwCourseId));
+      const res = await authFetch('/api/admin/assignments', {
+        method: 'POST',
+        body: JSON.stringify({
+          courseId: Number(hwCourseId),
+          title: hwTitle.trim(),
+          description: hwDesc.trim(),
+          dueDate: hwDueDate,
+          maxPoints: Number(hwMaxPoints) || 100,
+          rubric: hwRubric.trim(),
+          attachmentUrl: hwAttachmentUrl.trim() || null,
+          instructorId: profile?.id || 1,
+          instructorName: profile?.fullName || parentCourse?.instructorName || 'Mustaqeem Shaikh',
+        }),
+      });
+      if (res.ok) {
+        setHwTitle('');
+        setHwDesc('');
+        setHwAttachmentUrl('');
+        await loadHwStudioData();
+        showNotice('Homework assignment dispatched to enrolled cohort with notification!');
+      } else {
+        showNotice('Failed to assign homework.');
+      }
+    } catch {
+      showNotice('Error assigning homework.');
+    } finally {
+      setIsAssigningHw(false);
+    }
+  };
+
+  const handleDeleteAssignment = async (id: number) => {
+    try {
+      const res = await authFetch(`/api/admin/assignments/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setAssignedHomeworkList((prev) => prev.filter((a) => a.id !== id));
+        showNotice('Assignment deleted.');
+      }
+    } catch {
+      showNotice('Failed to delete assignment.');
+    }
+  };
+
+  const handleAddQuestionToQuiz = () => {
+    if (!draftPrompt.trim()) {
+      showNotice('Please write a Question Prompt.');
+      return;
+    }
+    let options: string[] | undefined = undefined;
+    if (draftType === 'multiple_choice') {
+      if (!draftOptionA.trim() || !draftOptionB.trim()) {
+        showNotice('Please provide at least Option A and Option B.');
+        return;
+      }
+      options = [draftOptionA.trim(), draftOptionB.trim()];
+      if (draftOptionC.trim()) options.push(draftOptionC.trim());
+      if (draftOptionD.trim()) options.push(draftOptionD.trim());
+    } else if (draftType === 'true_false') {
+      options = ['True', 'False'];
+    }
+
+    const newQ: QuizQuestion = {
+      id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      prompt: draftPrompt.trim(),
+      type: draftType,
+      options,
+      correctOptionIndex: draftType !== 'short_answer' ? draftCorrectIndex : undefined,
+      explanation: draftExplanation.trim() || 'Refer to primary source reading for analysis.',
+      points: Number(draftPoints) || 25,
+    };
+
+    setNewQuizQuestions((prev) => [...prev, newQ]);
+    setDraftPrompt('');
+    setDraftOptionA('');
+    setDraftOptionB('');
+    setDraftOptionC('');
+    setDraftOptionD('');
+    setDraftExplanation('');
+    showNotice('Question added to quiz outline!');
+  };
+
+  const handleSaveQuiz = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newQuizTitle.trim()) {
+      showNotice('Please specify a Quiz / Assessment Title.');
+      return;
+    }
+    if (newQuizQuestions.length === 0) {
+      showNotice('Please add at least 1 question to the quiz before saving.');
+      return;
+    }
+    try {
+      setIsCreatingQuiz(true);
+      const parentCourse = courses.find((c) => c.id === Number(newQuizCourseId));
+      const res = await authFetch('/api/admin/quizzes', {
+        method: 'POST',
+        body: JSON.stringify({
+          courseId: Number(newQuizCourseId),
+          title: newQuizTitle.trim(),
+          description: newQuizDesc.trim(),
+          timeLimitMinutes: Number(newQuizTimeLimit) || 10,
+          passingScore: Number(newQuizPassingScore) || 70,
+          badgeReward: newQuizBadge.trim() || 'Course Scholar',
+          questions: newQuizQuestions,
+          instructorId: profile?.id || 1,
+          instructorName: profile?.fullName || parentCourse?.instructorName || 'Mustaqeem Shaikh',
+        }),
+      });
+
+      if (res.ok) {
+        setNewQuizTitle('');
+        setNewQuizDesc('');
+        setNewQuizQuestions([]);
+        await loadHwStudioData();
+        showNotice('Interactive Quiz published to student curriculum with cool transitions!');
+      } else {
+        showNotice('Failed to create quiz.');
+      }
+    } catch {
+      showNotice('Error creating quiz.');
+    } finally {
+      setIsCreatingQuiz(false);
+    }
+  };
+
+  const handleDeleteQuiz = async (id: number) => {
+    try {
+      const res = await authFetch(`/api/admin/quizzes/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setQuizList((prev) => prev.filter((q) => q.id !== id));
+        showNotice('Quiz deleted.');
+      }
+    } catch {
+      showNotice('Failed to delete quiz.');
+    }
+  };
+
+  const handleGradeAssessmentAttempt = async (attemptId: number, feedback: string, status: string, score: number) => {
+    try {
+      const res = await authFetch(`/api/admin/assessments/${attemptId}/grade`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          assessmentFeedback: feedback,
+          assessmentStatus: status,
+          score,
+          assessedBy: profile?.fullName || 'Mustaqeem Shaikh',
+        }),
+      });
+      if (res.ok) {
+        await loadHwStudioData();
+        showNotice('Assessment score and certification status updated!');
+      }
+    } catch {
+      showNotice('Failed to update assessment.');
     }
   };
 
@@ -2421,15 +2675,36 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       />
                     </div>
 
-                    <button
-                      type="submit"
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors whitespace-nowrap"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>
-                        {editingLessonId ? 'Save Recording Changes' : 'Add Recording to Course'}
-                      </span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="submit"
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors whitespace-nowrap"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>
+                          {editingLessonId ? 'Save Recording Changes' : 'Add Recording to Course'}
+                        </span>
+                      </button>
+                      {editingLessonId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingLessonId(null);
+                            setLessonTitle('');
+                            setLessonDesc('');
+                            setLessonVideoUrl('');
+                            setResolvedLessonVideoUrl('');
+                            setLessonAttachment('');
+                            setLessonThumb('preset:seerah');
+                            setLessonDuration('45:00');
+                            setLessonScheduledDate('');
+                          }}
+                          className="px-4 py-2.5 rounded-lg text-xs font-medium academy-surface hover:text-white transition-colors"
+                        >
+                          Cancel Editing
+                        </button>
+                      )}
+                    </div>
                   </form>
                 )}
               </div>
@@ -3084,159 +3359,684 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         )}
 
         {/* MODULE D: STUDENT HOMEWORK SUBMISSIONS & GRADING */}
+        {/* MODULE D: HOMEWORK, QUIZZES & ASSESSMENTS STUDIO */}
           {activeModule === 'homework' && (
-            <div className="rounded-xl academy-surface p-6 space-y-5">
-              <div>
-                <h2 className="font-display text-lg font-bold text-teal-400">
-                  Student Homework Submissions ({(isInstructor ? managedHomework : homework).length})
-                </h2>
-                <p className="text-xs academy-text-secondary">
-                  Review homework submitted by enrolled students, download their attached files, and
-                  send back grades &amp; tutor feedback.
-                </p>
-              </div>
-
-              {(isInstructor ? managedHomework : homework).length === 0 ? (
-                <div className="py-10 text-center text-xs academy-text-secondary">
-                  {isInstructor
-                    ? 'No student homework submissions for your courses yet.'
-                    : 'No student homework submissions received yet.'}
+            <div className="rounded-xl academy-surface p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b academy-divider">
+                <div>
+                  <h2 className="font-display text-lg font-bold text-teal-400 flex items-center gap-2">
+                    <GraduationCap className="w-5 h-5 text-amber-400" />
+                    <span>Homework, Quizzes &amp; Assessments Studio</span>
+                  </h2>
+                  <p className="text-xs academy-text-secondary mt-0.5">
+                    Assign coursework to cohorts, design interactive quizzes with cool transitions, and evaluate student assessments.
+                  </p>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {(isInstructor ? managedHomework : homework).map((hw) => {
-                    const courseObj = courses.find((c) => c.id === hw.courseId);
-                    const currentInput = gradingInputs[hw.id] || {
-                      status: hw.status || 'graded',
-                      grade: hw.grade || 'A (95%)',
-                      feedback: hw.feedback || '',
-                    };
 
+                {/* Sub-tab Navigation */}
+                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900 border border-slate-800 text-xs overflow-x-auto no-scrollbar">
+                  {[
+                    { id: 'assign', label: 'Assign Homework', icon: Plus },
+                    { id: 'quizzes', label: 'Create Quizzes', icon: Award },
+                    { id: 'quiz_assessments', label: `Quiz Assessments (${quizAttemptsList.length})`, icon: ShieldCheck },
+                    { id: 'submissions', label: `Homework Submissions (${(isInstructor ? managedHomework : homework).length})`, icon: FileText },
+                  ].map((tab) => {
+                    const active = hwStudioTab === tab.id;
+                    const Icon = tab.icon;
                     return (
-                      <div
-                        key={hw.id}
-                        className="p-5 rounded-xl academy-elevated border border-teal-500/25 space-y-3"
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setHwStudioTab(tab.id as any)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold whitespace-nowrap transition-all ${
+                          active
+                            ? 'bg-teal-400 text-slate-950 shadow-sm'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                          <div>
-                            <span className="font-semibold text-teal-400">{hw.studentName}</span>
-                            <span className="academy-text-secondary">
-                              {' '}
-                              · {courseObj?.title || 'Course'}
-                            </span>
-                          </div>
-                          <span
-                            className={`font-mono-tabular uppercase ${
-                              hw.status === 'graded' || hw.status === 'exemplary'
-                                ? 'text-emerald-400'
-                                : hw.status === 'needs_revision'
-                                ? 'text-rose-400'
-                                : 'text-amber-300'
-                            }`}
-                          >
-                            {hw.status} {hw.grade ? `(${hw.grade})` : ''}
-                          </span>
-                        </div>
-
-                        <h3 className="font-display text-base font-bold">{hw.title}</h3>
-                        <p className="text-xs academy-text-secondary whitespace-pre-line leading-relaxed">
-                          {hw.content}
-                        </p>
-
-                        {hw.attachmentUrl && (
-                          <a
-                            href={hw.attachmentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs text-teal-400 hover:underline"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Open Student Homework Attachment</span>
-                          </a>
-                        )}
-
-                        <div className="pt-3 border-t academy-divider grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                          <div className="md:col-span-3">
-                            <label className="block text-[11px] academy-text-secondary mb-1">
-                              Grade Status
-                            </label>
-                            <select
-                              value={currentInput.status}
-                              onChange={(e) =>
-                                setGradingInputs((prev) => ({
-                                  ...prev,
-                                  [hw.id]: { ...currentInput, status: e.target.value },
-                                }))
-                              }
-                              className="w-full px-3 py-1.5 text-xs rounded-lg academy-surface"
-                            >
-                              <option value="graded">Approved / Graded</option>
-                              <option value="exemplary">Exemplary / Distinction</option>
-                              <option value="needs_revision">Revision Requested</option>
-                              <option value="under_review">Under Tutor Review</option>
-                              <option value="submitted">Submitted · Pending Review</option>
-                            </select>
-                          </div>
-                          <div className="md:col-span-2">
-                            <label className="block text-[11px] academy-text-secondary mb-1">
-                              Grade / Score
-                            </label>
-                            <input
-                              type="text"
-                              value={currentInput.grade}
-                              onChange={(e) =>
-                                setGradingInputs((prev) => ({
-                                  ...prev,
-                                  [hw.id]: { ...currentInput, grade: e.target.value },
-                                }))
-                              }
-                              placeholder="A+ / Completed"
-                              className="w-full px-3 py-1.5 text-xs rounded-lg academy-surface"
-                            />
-                          </div>
-                          <div className="md:col-span-5">
-                            <label className="block text-[11px] academy-text-secondary mb-1">
-                              Tutor Feedback Comments for Student
-                            </label>
-                            <input
-                              type="text"
-                              value={currentInput.feedback}
-                              onChange={(e) =>
-                                setGradingInputs((prev) => ({
-                                  ...prev,
-                                  [hw.id]: { ...currentInput, feedback: e.target.value },
-                                }))
-                              }
-                              placeholder="MashaAllah, excellent textual analysis..."
-                              className="w-full px-3 py-1.5 text-xs rounded-lg academy-surface"
-                            />
-                          </div>
-                          <div className="md:col-span-2">
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const res = await authFetch(
-                                  `/api/admin/homework/${hw.id}/grade`,
-                                  {
-                                    method: 'PUT',
-                                    body: JSON.stringify(currentInput),
-                                  }
-                                );
-                                if (res.ok) {
-                                  await onRefreshData();
-                                  showNotice('Homework graded and feedback sent to student!');
-                                }
-                              }}
-                              className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>Save Grade</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+                        <Icon className="w-3.5 h-3.5" />
+                        <span>{tab.label}</span>
+                      </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* TAB 1: ASSIGN HOMEWORK */}
+              {hwStudioTab === 'assign' && (
+                <div className="space-y-6">
+                  <form onSubmit={handleAssignHomework} className="p-5 rounded-xl academy-elevated border border-teal-500/25 space-y-4">
+                    <h3 className="font-display text-sm font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-teal-400" />
+                      <span>Assign New Coursework / Research Folio</span>
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs academy-text-secondary mb-1">Target Academic Course *</label>
+                        <select
+                          value={hwCourseId}
+                          onChange={(e) => setHwCourseId(Number(e.target.value))}
+                          className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800"
+                        >
+                          {(isInstructor ? managedCourses : courses).map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.title}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs academy-text-secondary mb-1">Homework Title *</label>
+                        <input
+                          type="text"
+                          required
+                          value={hwTitle}
+                          onChange={(e) => setHwTitle(e.target.value)}
+                          placeholder="e.g. Module 2: Sarf Verb Conjugation & Morphological Folio"
+                          className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800 text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs academy-text-secondary mb-1">Submission Deadline *</label>
+                        <input
+                          type="date"
+                          required
+                          value={hwDueDate}
+                          onChange={(e) => setHwDueDate(e.target.value)}
+                          className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs academy-text-secondary mb-1">Maximum Points / Score</label>
+                        <input
+                          type="number"
+                          value={hwMaxPoints}
+                          onChange={(e) => setHwMaxPoints(Number(e.target.value))}
+                          className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800 text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs academy-text-secondary mb-1">Assignment Instructions &amp; Prompts *</label>
+                      <textarea
+                        rows={3}
+                        required
+                        value={hwDesc}
+                        onChange={(e) => setHwDesc(e.target.value)}
+                        placeholder="Detail the research questions, required pages, and source citations..."
+                        className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800 text-white"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs academy-text-secondary mb-1">Grading Rubric / Evaluation Criteria</label>
+                        <input
+                          type="text"
+                          value={hwRubric}
+                          onChange={(e) => setHwRubric(e.target.value)}
+                          placeholder="e.g. Textual analysis (50pts), Scholarly reflection (30pts)..."
+                          className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs academy-text-secondary mb-1">Starter Resource / Template URL (Optional)</label>
+                        <input
+                          type="text"
+                          value={hwAttachmentUrl}
+                          onChange={(e) => setHwAttachmentUrl(e.target.value)}
+                          placeholder="https://... or PDF folio download"
+                          className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800 text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="submit"
+                        disabled={isAssigningHw}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-400 hover:bg-teal-300 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>{isAssigningHw ? 'Assigning...' : 'Dispatch Homework to Cohort'}</span>
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Active Assigned Homework List */}
+                  <div className="space-y-3">
+                    <h4 className="font-display text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Currently Assigned Coursework ({assignedHomeworkList.length})
+                    </h4>
+                    {assignedHomeworkList.length === 0 ? (
+                      <div className="py-8 text-center text-xs academy-text-secondary rounded-xl academy-surface">
+                        No active homework assignments yet. Use the form above to assign coursework.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {assignedHomeworkList.map((item) => {
+                          const courseObj = courses.find((c) => c.id === item.courseId);
+                          return (
+                            <div key={item.id} className="p-4 rounded-xl academy-elevated border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 text-xs">
+                                  <span className="font-bold text-teal-400">{courseObj?.title || 'Course'}</span>
+                                  <span className="text-slate-500">•</span>
+                                  <span className="text-amber-300 font-mono text-[11px]">Due: {item.dueDate}</span>
+                                  <span className="text-slate-500">•</span>
+                                  <span className="text-slate-400 text-[11px]">{item.maxPoints} pts max</span>
+                                </div>
+                                <h5 className="font-display text-sm font-bold text-white">{item.title}</h5>
+                                <p className="text-xs academy-text-secondary line-clamp-2">{item.description}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAssignment(item.id)}
+                                className="p-2 rounded-lg academy-surface text-rose-400 hover:bg-rose-500/10 shrink-0 self-end sm:self-center"
+                                title="Delete Assignment"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: CREATE QUIZZES & ASSESSMENTS */}
+              {hwStudioTab === 'quizzes' && (
+                <div className="space-y-6">
+                  <form onSubmit={handleSaveQuiz} className="p-5 rounded-xl academy-elevated border border-teal-500/25 space-y-5">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-display text-sm font-bold text-white flex items-center gap-2">
+                        <Award className="w-4 h-4 text-amber-400" />
+                        <span>Interactive Quiz &amp; Milestone Assessment Creator</span>
+                      </h3>
+                      <span className="text-xs text-teal-300 font-mono font-bold">
+                        {newQuizQuestions.length} Question{newQuizQuestions.length === 1 ? '' : 's'} Staged
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs academy-text-secondary mb-1">Target Academic Course *</label>
+                        <select
+                          value={newQuizCourseId}
+                          onChange={(e) => setNewQuizCourseId(Number(e.target.value))}
+                          className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800"
+                        >
+                          {(isInstructor ? managedCourses : courses).map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.title}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs academy-text-secondary mb-1">Quiz / Assessment Title *</label>
+                        <input
+                          type="text"
+                          required
+                          value={newQuizTitle}
+                          onChange={(e) => setNewQuizTitle(e.target.value)}
+                          placeholder="e.g. Seerah Milestone Assessment: Early Revelation & Hijrah"
+                          className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800 text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-xs academy-text-secondary mb-1">Time Limit (Minutes)</label>
+                        <input
+                          type="number"
+                          value={newQuizTimeLimit}
+                          onChange={(e) => setNewQuizTimeLimit(Number(e.target.value))}
+                          placeholder="10 (0 for untimed)"
+                          className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs academy-text-secondary mb-1">Passing Threshold (%)</label>
+                        <input
+                          type="number"
+                          value={newQuizPassingScore}
+                          onChange={(e) => setNewQuizPassingScore(Number(e.target.value))}
+                          placeholder="70"
+                          className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs academy-text-secondary mb-1">Earned Badge Award</label>
+                        <input
+                          type="text"
+                          value={newQuizBadge}
+                          onChange={(e) => setNewQuizBadge(e.target.value)}
+                          placeholder="e.g. Certified Seerah Scholar"
+                          className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800 text-white"
+                        />
+                      </div>
+                    </div>
+
+                    {/* DYNAMIC QUESTION BUILDER */}
+                    <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3.5">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <span className="text-xs font-bold text-teal-400 flex items-center gap-1.5">
+                          <HelpCircle className="w-3.5 h-3.5" />
+                          <span>Question Builder</span>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {(['multiple_choice', 'true_false', 'short_answer'] as const).map((t) => (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => setDraftType(t)}
+                              className={`px-2.5 py-1 rounded text-[11px] font-semibold capitalize transition-colors ${
+                                draftType === t
+                                  ? 'bg-teal-400 text-slate-950 font-bold'
+                                  : 'bg-slate-800 text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {t.replace('_', ' ')}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs academy-text-secondary mb-1">Question Prompt *</label>
+                        <input
+                          type="text"
+                          value={draftPrompt}
+                          onChange={(e) => setDraftPrompt(e.target.value)}
+                          placeholder="e.g. Which treaty was enacted to defend the oppressed in pre-Islamic Mecca?"
+                          className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800 text-white"
+                        />
+                      </div>
+
+                      {draftType === 'multiple_choice' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {[
+                            { label: 'Option A', val: draftOptionA, setVal: setDraftOptionA, idx: 0 },
+                            { label: 'Option B', val: draftOptionB, setVal: setDraftOptionB, idx: 1 },
+                            { label: 'Option C', val: draftOptionC, setVal: setDraftOptionC, idx: 2 },
+                            { label: 'Option D', val: draftOptionD, setVal: setDraftOptionD, idx: 3 },
+                          ].map((opt) => (
+                            <div key={opt.label} className="flex items-center gap-2 p-2 rounded-lg academy-surface border border-slate-800">
+                              <input
+                                type="radio"
+                                name="correctOption"
+                                checked={draftCorrectIndex === opt.idx}
+                                onChange={() => setDraftCorrectIndex(opt.idx)}
+                                title="Mark as Correct Answer"
+                                className="accent-teal-400"
+                              />
+                              <input
+                                type="text"
+                                value={opt.val}
+                                onChange={(e) => opt.setVal(e.target.value)}
+                                placeholder={`${opt.label} text...`}
+                                className="w-full bg-transparent text-xs text-white outline-none"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {draftType === 'true_false' && (
+                        <div className="flex items-center gap-4 text-xs">
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="tfCorrect"
+                              checked={draftCorrectIndex === 0}
+                              onChange={() => setDraftCorrectIndex(0)}
+                              className="accent-teal-400"
+                            />
+                            <span className="text-white font-semibold">True is Correct</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="tfCorrect"
+                              checked={draftCorrectIndex === 1}
+                              onChange={() => setDraftCorrectIndex(1)}
+                              className="accent-teal-400"
+                            />
+                            <span className="text-white font-semibold">False is Correct</span>
+                          </label>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-xs academy-text-secondary mb-1">Scholarly Explanation for Students</label>
+                        <input
+                          type="text"
+                          value={draftExplanation}
+                          onChange={(e) => setDraftExplanation(e.target.value)}
+                          placeholder="Explain the classical textual evidence and historic context..."
+                          className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800 text-white"
+                        />
+                      </div>
+
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleAddQuestionToQuiz}
+                          className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-teal-300 font-semibold text-xs border border-teal-500/30 transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>+ Add Question to Staged Quiz</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Staged Questions List */}
+                    {newQuizQuestions.length > 0 && (
+                      <div className="space-y-2 p-3 rounded-xl academy-surface border border-slate-800">
+                        <span className="text-xs font-bold text-amber-300">Staged Questions ({newQuizQuestions.length}):</span>
+                        <div className="space-y-2 max-h-48 overflow-y-auto no-scrollbar">
+                          {newQuizQuestions.map((q, idx) => (
+                            <div key={q.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-950 text-xs">
+                              <span className="truncate text-white">
+                                <strong>Q{idx + 1}:</strong> {q.prompt}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setNewQuizQuestions((prev) => prev.filter((item) => item.id !== q.id))}
+                                className="text-rose-400 hover:text-rose-300 p-1"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="submit"
+                        disabled={isCreatingQuiz || newQuizQuestions.length === 0}
+                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-teal-400 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-slate-950 font-bold text-xs shadow-lg transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        <span>{isCreatingQuiz ? 'Publishing...' : 'Publish Interactive Quiz to Students'}</span>
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Active Quizzes List */}
+                  <div className="space-y-3">
+                    <h4 className="font-display text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Published Quizzes &amp; Assessments ({quizList.length})
+                    </h4>
+                    {quizList.length === 0 ? (
+                      <div className="py-8 text-center text-xs academy-text-secondary rounded-xl academy-surface">
+                        No quizzes published yet. Use the creator above to stage questions.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {quizList.map((q) => {
+                          const courseObj = courses.find((c) => c.id === q.courseId);
+                          return (
+                            <div key={q.id} className="p-4 rounded-xl academy-elevated border border-slate-800 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-teal-400 truncate">{courseObj?.title || 'Course'}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteQuiz(q.id)}
+                                  className="text-rose-400 hover:text-rose-300 p-1"
+                                  title="Delete Quiz"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <h5 className="font-display text-sm font-bold text-white">{q.title}</h5>
+                              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                                <span>{q.questions.length} Questions</span>
+                                <span>•</span>
+                                <span>{q.timeLimitMinutes > 0 ? `${q.timeLimitMinutes} mins` : 'Untimed'}</span>
+                                <span>•</span>
+                                <span>Pass: {q.passingScore}%</span>
+                              </div>
+                              {q.badgeReward && (
+                                <div className="text-[10px] text-amber-300 font-semibold flex items-center gap-1">
+                                  <Award className="w-3 h-3" />
+                                  <span>Reward: {q.badgeReward}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: GIVE ASSESSMENTS & STUDENT QUIZ ATTEMPTS */}
+              {hwStudioTab === 'quiz_assessments' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-display text-sm font-bold text-white">Student Quiz Assessment Attempts</h3>
+                      <p className="text-xs academy-text-secondary">Review student attempt scorecards, adjust marks, and issue certification endorsements.</p>
+                    </div>
+                  </div>
+
+                  {quizAttemptsList.length === 0 ? (
+                    <div className="py-12 text-center text-xs academy-text-secondary rounded-xl academy-surface">
+                      No student quiz attempts recorded yet. Once students take quizzes, their evaluations appear here.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {quizAttemptsList.map((att) => {
+                        return (
+                          <div key={att.id} className="p-5 rounded-xl academy-elevated border border-slate-800 space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                              <div>
+                                <span className="font-bold text-white">{att.studentName}</span>
+                                <span className="text-slate-400"> ({att.studentEmail}) · {att.quizTitle}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] ${
+                                  att.passed ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                }`}>
+                                  Score: {att.score}% · {att.passed ? 'PASSED' : 'REVISION'}
+                                </span>
+                                <span className="text-[10px] text-slate-500">{att.completedAt?.slice(0, 10)}</span>
+                              </div>
+                            </div>
+
+                            <p className="text-xs text-slate-300 leading-relaxed italic bg-slate-950 p-3 rounded-lg border border-slate-800">
+                              &ldquo;{att.assessmentFeedback}&rdquo;
+                            </p>
+
+                            <div className="pt-2 flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleGradeAssessmentAttempt(att.id, 'Passed with Distinction. Excellent textual synthesis.', 'certified', Math.max(att.score, 95))}
+                                className="px-3 py-1.5 rounded-lg bg-teal-400 text-slate-950 font-bold text-xs hover:bg-teal-300 transition-colors"
+                              >
+                                Endorse Distinction &amp; Certify
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleGradeAssessmentAttempt(att.id, 'Assessment evaluated. Revisit lecture folio for refinement.', 'evaluated', att.score)}
+                                className="px-3 py-1.5 rounded-lg academy-surface text-slate-300 hover:text-white text-xs border border-slate-700 transition-colors"
+                              >
+                                Mark Evaluated
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 4: HOMEWORK SUBMISSIONS & GRADING */}
+              {hwStudioTab === 'submissions' && (
+                <div className="space-y-4">
+                  {(isInstructor ? managedHomework : homework).length === 0 ? (
+                    <div className="py-10 text-center text-xs academy-text-secondary">
+                      {isInstructor
+                        ? 'No student homework submissions for your courses yet.'
+                        : 'No student homework submissions received yet.'}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {(isInstructor ? managedHomework : homework).map((hw) => {
+                        const courseObj = courses.find((c) => c.id === hw.courseId);
+                        const currentInput = gradingInputs[hw.id] || {
+                          status: hw.status || 'graded',
+                          grade: hw.grade || 'A (95%)',
+                          feedback: hw.feedback || '',
+                        };
+
+                        return (
+                          <div
+                            key={hw.id}
+                            className="p-5 rounded-xl academy-elevated border border-teal-500/25 space-y-3"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                              <div>
+                                <span className="font-semibold text-teal-400">{hw.studentName}</span>
+                                <span className="academy-text-secondary">
+                                  {' '}
+                                  · {courseObj?.title || 'Course'}
+                                </span>
+                              </div>
+                              <span
+                                className={`font-mono-tabular uppercase ${
+                                  hw.status === 'graded' || hw.status === 'exemplary'
+                                    ? 'text-emerald-400'
+                                    : hw.status === 'needs_revision'
+                                    ? 'text-rose-400'
+                                    : 'text-amber-300'
+                                }`}
+                              >
+                                {hw.status} {hw.grade ? `(${hw.grade})` : ''}
+                              </span>
+                            </div>
+
+                            <h3 className="font-display text-base font-bold">{hw.title}</h3>
+                            <p className="text-xs academy-text-secondary whitespace-pre-line leading-relaxed">
+                              {hw.content}
+                            </p>
+
+                            {hw.attachmentUrl && (
+                              <a
+                                href={hw.attachmentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 text-xs text-teal-400 hover:underline"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Open Student Homework Attachment</span>
+                              </a>
+                            )}
+
+                            <div className="pt-3 border-t academy-divider grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                              <div className="md:col-span-3">
+                                <label className="block text-[11px] academy-text-secondary mb-1">
+                                  Grade Status
+                                </label>
+                                <select
+                                  value={currentInput.status}
+                                  onChange={(e) =>
+                                    setGradingInputs((prev) => ({
+                                      ...prev,
+                                      [hw.id]: { ...currentInput, status: e.target.value },
+                                    }))
+                                  }
+                                  className="w-full px-3 py-1.5 text-xs rounded-lg academy-surface"
+                                >
+                                  <option value="graded">Approved / Graded</option>
+                                  <option value="exemplary">Exemplary / Distinction</option>
+                                  <option value="needs_revision">Revision Requested</option>
+                                  <option value="under_review">Under Tutor Review</option>
+                                  <option value="submitted">Submitted · Pending Review</option>
+                                </select>
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="block text-[11px] academy-text-secondary mb-1">
+                                  Grade / Score
+                                </label>
+                                <input
+                                  type="text"
+                                  value={currentInput.grade}
+                                  onChange={(e) =>
+                                    setGradingInputs((prev) => ({
+                                      ...prev,
+                                      [hw.id]: { ...currentInput, grade: e.target.value },
+                                    }))
+                                  }
+                                  placeholder="A+ / Completed"
+                                  className="w-full px-3 py-1.5 text-xs rounded-lg academy-surface"
+                                />
+                              </div>
+                              <div className="md:col-span-5">
+                                <label className="block text-[11px] academy-text-secondary mb-1">
+                                  Tutor Feedback Comments for Student
+                                </label>
+                                <input
+                                  type="text"
+                                  value={currentInput.feedback}
+                                  onChange={(e) =>
+                                    setGradingInputs((prev) => ({
+                                      ...prev,
+                                      [hw.id]: { ...currentInput, feedback: e.target.value },
+                                    }))
+                                  }
+                                  placeholder="MashaAllah, excellent textual analysis..."
+                                  className="w-full px-3 py-1.5 text-xs rounded-lg academy-surface"
+                                />
+                              </div>
+                              <div className="md:col-span-2">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const res = await authFetch(
+                                      `/api/admin/homework/${hw.id}/grade`,
+                                      {
+                                        method: 'PUT',
+                                        body: JSON.stringify(currentInput),
+                                      }
+                                    );
+                                    if (res.ok) {
+                                      await onRefreshData();
+                                      showNotice('Homework graded and feedback sent to student!');
+                                    }
+                                  }}
+                                  className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Save Grade</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

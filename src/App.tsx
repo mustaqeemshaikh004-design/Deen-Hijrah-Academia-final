@@ -40,6 +40,7 @@ import { OpenEnrollmentHeroBanner } from './components/OpenEnrollmentHeroBanner.
 import { RoleApplicationModal } from './components/RoleApplicationModal.tsx';
 import { InfiniteCourseMarquee } from './components/InfiniteCourseMarquee.tsx';
 import { CourseDetailsModal } from './components/CourseDetailsModal.tsx';
+import { StudentBlogsPage } from './components/StudentBlogsPage.tsx';
 import {
   Course,
   Lesson,
@@ -142,6 +143,7 @@ function AcademyPortalContent() {
         dashboard: { msg: 'Accessing Student Portal & Recordings...', title: 'Student Dashboard' },
         admin: { msg: 'Unlocking Teacher Studio...', title: 'Faculty & Curriculum Manager' },
         enroll: { msg: 'Preparing 2026 Cohort Registration...', title: 'Sacred Knowledge Enrollment' },
+        blogs: { msg: 'Loading Student Research & Academic Publications...', title: 'Student Blogs & Articles' },
       };
 
       const meta = messagesByView[view] || {
@@ -819,6 +821,23 @@ function AcademyPortalContent() {
                   }}
                   onOpenDashboard={() => handleNavigateWithLogo('dashboard')}
                   onBackToCatalog={() => handleNavigateWithLogo('courses')}
+                />
+              </motion.div>
+            ) : activeView === 'blogs' ? (
+              <motion.div
+                key="blogs-view"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full"
+              >
+                <StudentBlogsPage
+                  currentProfile={profile}
+                  onOpenAuthModal={() => openAuthModal(profile ? 'signin' : 'create')}
+                  onUploadFile={uploadMediaFile}
+                  showToast={showToast}
+                  onNavigateHome={() => handleNavigateWithLogo('home')}
                 />
               </motion.div>
             ) : (

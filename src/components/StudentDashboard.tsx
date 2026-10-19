@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { motion } from 'motion/react';
 import {
   BookOpen,
   Video,
@@ -27,6 +28,8 @@ import {
   ThumbsDown,
   GraduationCap,
   ArrowRight,
+  Award,
+  Clock,
 } from 'lucide-react';
 import { getZoomEventDetails, safeOpenLink } from '../lib/zoomService.ts';
 import { AnimatedPdfViewer } from './AnimatedPdfViewer.tsx';
@@ -41,6 +44,9 @@ import {
   Profile,
   HomeworkSubmission,
   HomeworkGradeStatus,
+  HomeworkAssignment,
+  Quiz,
+  QuizAttempt,
   Announcement,
   parseCourseTags,
 } from '../types.ts';
@@ -58,6 +64,7 @@ import { smartApiFetch } from '../lib/fallbackStore.ts';
 import { CourseAttendanceSection } from './CourseAttendanceSection.tsx';
 import { StudentArticlesHub } from './StudentArticlesHub.tsx';
 import { CourseDetailsModal } from './CourseDetailsModal.tsx';
+import { QuizAssessmentModal } from './QuizAssessmentModal.tsx';
 
 interface StudentDashboardProps {
   profile: Profile | null;
@@ -176,6 +183,38 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [hwAttachment, setHwAttachment] = useState('');
   const [uploadingHwFile, setUploadingHwFile] = useState(false);
   const [submittingHw, setSubmittingHw] = useState(false);
+
+  // Quizzes, Assessments & Assigned Homework State
+  const [dashboardQuizzes, setDashboardQuizzes] = useState<Quiz[]>([]);
+  const [dashboardAssignments, setDashboardAssignments] = useState<HomeworkAssignment[]>([]);
+  const [dashboardAttempts, setDashboardAttempts] = useState<QuizAttempt[]>([]);
+  const [activeQuizModal, setActiveQuizModal] = useState<Quiz | null>(null);
+
+  const fetchQuizzesAndAssignments = async () => {
+    try {
+      const [qRes, aRes, attRes] = await Promise.all([
+        smartApiFetch('/api/quizzes'),
+        smartApiFetch('/api/assignments'),
+        smartApiFetch('/api/quiz-attempts'),
+      ]);
+      if (qRes.ok) {
+        const data = await qRes.json();
+        if (Array.isArray(data)) setDashboardQuizzes(data);
+      }
+      if (aRes.ok) {
+        const data = await aRes.json();
+        if (Array.isArray(data)) setDashboardAssignments(data);
+      }
+      if (attRes.ok) {
+        const data = await attRes.json();
+        if (Array.isArray(data)) setDashboardAttempts(data);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchQuizzesAndAssignments();
+  }, []);
 
   // Tutor Feedback & Grade Status Editor State inside Homework Component
   const [openTutorEditorId, setOpenTutorEditorId] = useState<number | null>(null);
@@ -1296,7 +1335,152 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       {/* TAB 2: HOMEWORK SUBMISSION & FACULTY FEEDBACK / GRADE STATUSES */}
       {activeTab === 'homework' && (
         <div className="space-y-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* SECTION 1: INTERACTIVE COURSE QUIZZES & ASSESSMENTS (COOL TRANSITIONS) */}
+          <div className="rounded-xl academy-surface p-6 space-y-4 border border-teal-500/20">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="font-display text-base font-bold text-teal-400 flex items-center gap-2">
+                  <Award className="w-5 h-5 text-amber-400" />
+                  <span>Course Quizzes &amp; Milestone Assessments</span>
+                </h3>
+                <p className="text-xs academy-text-secondary mt-0.5">
+                  Complete interactive timed knowledge assessments with cool transitions, receive immediate scorecards, and earn scholar certification badges.
+                </p>
+              </div>
+              <span className="text-xs text-amber-300 font-mono font-bold">
+                {dashboardQuizzes.length} Assessment{dashboardQuizzes.length === 1 ? '' : 's'} Available
+              </span>
+            </div>
+
+            {dashboardQuizzes.length === 0 ? (
+              <div className="py-6 text-center text-xs academy-text-secondary">
+                No active quizzes staged yet. Check back soon for cohort assessments.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {dashboardQuizzes.map((quiz) => {
+                  const courseObj = courses.find((c) => c.id === quiz.courseId);
+                  const studentAttempt = dashboardAttempts.find(
+                    (a) => a.quizId === quiz.id && (profile ? a.studentId === profile.id : true)
+                  );
+                  return (
+                    <motion.div
+                      key={quiz.id}
+                      whileHover={{ scale: 1.02 }}
+                      className="p-4 rounded-xl academy-elevated border border-slate-800 hover:border-teal-400/50 transition-all flex flex-col justify-between space-y-3 group shadow-md"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="px-2 py-0.5 rounded bg-teal-400/10 text-teal-300 font-semibold border border-teal-400/20 truncate">
+                            {courseObj?.title || 'Academy Program'}
+                          </span>
+                          <span className="text-slate-400 flex items-center gap-1 font-mono">
+                            <Clock className="w-3 h-3 text-amber-400" />
+                            <span>{quiz.timeLimitMinutes > 0 ? `${quiz.timeLimitMinutes}m` : 'Untimed'}</span>
+                          </span>
+                        </div>
+
+                        <h4 className="font-display text-sm font-bold text-white group-hover:text-teal-300 transition-colors line-clamp-2">
+                          {quiz.title}
+                        </h4>
+
+                        <p className="text-xs academy-text-secondary line-clamp-2">
+                          {quiz.description || 'Test your textual comprehension and analytical parsing.'}
+                        </p>
+
+                        <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                          <span>{quiz.questions.length} Questions</span>
+                          <span>•</span>
+                          <span>Passing standard: {quiz.passingScore}%</span>
+                        </div>
+
+                        {studentAttempt && (
+                          <div className={`p-2 rounded-lg text-xs font-bold flex items-center justify-between ${
+                            studentAttempt.passed
+                              ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300'
+                              : 'bg-amber-950/40 border border-amber-500/40 text-amber-300'
+                          }`}>
+                            <span>Last Score: {studentAttempt.score}%</span>
+                            <span className="uppercase text-[10px] tracking-wider">
+                              {studentAttempt.passed ? 'Passed ✓' : 'Needs Review'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveQuizModal(quiz)}
+                        className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-teal-400 hover:bg-teal-300 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>{studentAttempt ? 'Retake Assessment' : 'Take Quiz Assessment'}</span>
+                      </button>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* SECTION 2: ASSIGNED HOMEWORK FROM FACULTY */}
+          {dashboardAssignments.length > 0 && (
+            <div className="rounded-xl academy-surface p-6 space-y-4 border border-teal-500/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-display text-base font-bold text-white flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-teal-400" />
+                    <span>Assigned Homework &amp; Research Folios</span>
+                  </h3>
+                  <p className="text-xs academy-text-secondary mt-0.5">
+                    Official coursework assigned by Mustaqeem Shaikh and course instructors.
+                  </p>
+                </div>
+                <span className="text-xs text-teal-300 font-mono font-bold">
+                  {dashboardAssignments.length} Assignment{dashboardAssignments.length === 1 ? '' : 's'} Assigned
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {dashboardAssignments.map((asgn) => {
+                  const courseObj = courses.find((c) => c.id === asgn.courseId);
+                  return (
+                    <div key={asgn.id} className="p-4 rounded-xl academy-elevated border border-slate-800 space-y-2.5 flex flex-col justify-between">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-bold text-teal-400">{courseObj?.title || 'Course'}</span>
+                          <span className="text-amber-300 font-mono font-bold">Due: {asgn.dueDate}</span>
+                        </div>
+                        <h4 className="font-display text-sm font-bold text-white">{asgn.title}</h4>
+                        <p className="text-xs academy-text-secondary leading-relaxed line-clamp-3">{asgn.description}</p>
+                        {asgn.rubric && (
+                          <div className="text-[11px] text-slate-400 italic bg-slate-950 p-2 rounded border border-slate-800">
+                            <strong>Rubric:</strong> {asgn.rubric}
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHwCourseId(asgn.courseId);
+                          setHwTitle(`Submission: ${asgn.title}`);
+                          const el = document.getElementById('hw-submit-form');
+                          if (el) el.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                        className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-teal-400 hover:text-slate-950 text-xs font-bold text-teal-300 transition-colors"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Submit For This Homework</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div id="hw-submit-form" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <div className="lg:col-span-5 rounded-xl academy-surface p-6 space-y-4">
               <h2 className="font-display text-lg font-bold text-teal-400">
                 Submit Course Homework
@@ -2267,6 +2451,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           title={activePdfModal.title}
           onClose={() => setActivePdfModal(null)}
           variant="modal"
+        />
+      )}
+
+      {/* Interactive Quiz & Knowledge Assessment Modal with Cool Transitions */}
+      {activeQuizModal && (
+        <QuizAssessmentModal
+          quiz={activeQuizModal}
+          isOpen={Boolean(activeQuizModal)}
+          onClose={() => setActiveQuizModal(null)}
+          currentProfile={profile}
+          onCompleted={async (attempt) => {
+            setDashboardAttempts((prev) => [attempt, ...prev.filter((a) => a.id !== attempt.id)]);
+            await fetchQuizzesAndAssignments();
+          }}
+          showToast={() => {}}
         />
       )}
     </div>

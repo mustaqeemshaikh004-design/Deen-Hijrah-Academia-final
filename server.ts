@@ -1221,6 +1221,253 @@ app.post('/api/attendance/auto-log', requireAuth, async (req: AuthRequest, res: 
   }
 });
 
+// ==========================================
+// 7. Teacher/Admin Homework & Quizzes & Assessments Studio
+// ==========================================
+let serverAssignments: any[] = [
+  {
+    id: 1,
+    courseId: 1,
+    lessonId: 1,
+    instructorId: 1,
+    instructorName: 'Mustaqeem Shaikh',
+    title: 'Biographical Timeline & Prophetic Character Synthesis',
+    description: 'Compose a 1,000-word scholarly summary highlighting the pivotal milestones between Hilf al-Fudul and the First Revelation in Cave Hira.',
+    dueDate: '2026-11-15',
+    maxPoints: 100,
+    rubric: 'Historical precision (40pts), Analysis of character traits (35pts), Scholarly citations (25pts)',
+    attachmentUrl: null,
+    createdAt: '2026-10-18T12:00:00Z',
+  },
+  {
+    id: 2,
+    courseId: 2,
+    lessonId: null,
+    instructorId: 1,
+    instructorName: 'Mustaqeem Shaikh',
+    title: 'Al-Ajrumiyyah Grammatical Parsing (I`rab Exercise)',
+    description: 'Provide full I`rab breakdown for the 5 sample sentences discussed in Lesson 2 with morphological reasoning.',
+    dueDate: '2026-11-20',
+    maxPoints: 100,
+    rubric: 'Correct vowel markings (50pts), Correct syntactic justification (50pts)',
+    attachmentUrl: null,
+    createdAt: '2026-10-18T12:00:00Z',
+  },
+];
+
+let serverQuizzes: any[] = [
+  {
+    id: 1,
+    courseId: 1,
+    lessonId: 1,
+    title: 'Seerah Milestones & Prophetic Character Assessment',
+    description: 'Assess foundational events of the Makkan period prior to the public call to Tawhid.',
+    timeLimitMinutes: 10,
+    passingScore: 75,
+    badgeAwardName: 'Distinguished Seerah Scholar',
+    questions: [
+      {
+        id: 'q1',
+        prompt: 'At what age did Prophet Muhammad (peace be upon him) participate in Hilf al-Fudul (the Alliance of the Virtuous)?',
+        options: ['Approximately 20 years old', '35 years old', '12 years old', '40 years old'],
+        correctIndex: 0,
+        explanation: 'The Prophet (peace be upon him) attended the pact around the age of twenty and later praised its commitment to defending the oppressed.',
+        points: 25,
+      },
+      {
+        id: 'q2',
+        prompt: 'Which prominent merchant noblewoman appointed the Prophet (pbuh) to lead her trading caravan to Ash-Sham based on his truthfulness (As-Sadiq, Al-Amin)?',
+        options: ['Sayyidah Khadijah bint Khuwaylid', 'Sayyidah Fatimah', 'Sayyidah Aishah', 'Sayyidah Sawdah'],
+        correctIndex: 0,
+        explanation: 'Sayyidah Khadijah (may Allah be pleased with her) entrusted him with her trade and subsequently proposed marriage.',
+        points: 25,
+      },
+      {
+        id: 'q3',
+        prompt: 'During the rebuilding of the Ka`bah when the Prophet was 35, how did he resolve the dispute of placing the Black Stone (al-Hajar al-Aswad)?',
+        options: ['By placing it onto a cloak so all tribal leaders carried it together', 'By calling an armed duel', 'By rolling dice', 'By postponing it 10 years'],
+        correctIndex: 0,
+        explanation: 'His wisdom united all Qurayshi tribes by placing the Stone on a garment and having representatives lift it jointly.',
+        points: 25,
+      },
+      {
+        id: 'q4',
+        prompt: 'In which sanctuary did the first revelation descend with "Iqra bi-ismi Rabbika"?',
+        options: ['Cave of Hira on Mount Nur', 'Cave of Thawr', 'Mount Uhud', 'Masjid Quba'],
+        correctIndex: 0,
+        explanation: 'Jibril (Gabriel) descended with the opening ayaat of Surah Al-Alaq in Cave Hira.',
+        points: 25,
+      },
+    ],
+    createdAt: '2026-10-18T12:00:00Z',
+  },
+  {
+    id: 2,
+    courseId: 2,
+    lessonId: null,
+    title: 'Arabic Nahw Foundation & Nominal Sentence Quiz',
+    description: 'Test your understanding of mubtada, khabar, and vocal inflection markers.',
+    timeLimitMinutes: 8,
+    passingScore: 70,
+    badgeAwardName: 'Nahw Grammatical Adept',
+    questions: [
+      {
+        id: 'q1',
+        prompt: 'What are the three fundamental parts of speech (Aqsam al-Kalam) in Arabic grammar?',
+        options: ['Ism (Noun), Fi`l (Verb), Harf (Particle)', 'Mubtada, Khabar, Maf`ul', 'Madi, Mudari, Amr', 'Mu`rab, Mabni, Majhul'],
+        correctIndex: 0,
+        explanation: 'Kalam is partitioned into Ism, Fi`l, and Harf according to Ibn Ajrum and grammarians.',
+        points: 30,
+      },
+      {
+        id: 'q2',
+        prompt: 'What is the default grammatical case and marker for the Mubtada (subject) in a nominal sentence?',
+        options: ['Marfoo` with a Dammah', 'Mansoub with a Fathah', 'Majroor with a Kasrah', 'Majzoom with a Sukun'],
+        correctIndex: 0,
+        explanation: 'The mubtada is fundamentally marfoo` (in the nominative state), marked primarily by a dammah.',
+        points: 35,
+      },
+      {
+        id: 'q3',
+        prompt: 'Which sign uniquely distinguishes an Ism (noun) from a Fi`l (verb)?',
+        options: ['Acceptance of Tanween and Alif-Lam', 'Prefixing of the particle Sawfa', 'Taking a Jazm marker', 'Suffixing of the Ta al-Fa`il'],
+        correctIndex: 0,
+        explanation: 'Tanween and the definite article Al- are exclusive to Ism.',
+        points: 35,
+      },
+    ],
+    createdAt: '2026-10-18T12:00:00Z',
+  },
+];
+
+let serverQuizAttempts: any[] = [];
+
+// Assignments Endpoints
+app.get('/api/assignments', (req: Request, res: Response) => {
+  const courseId = Number(req.query.courseId);
+  if (courseId) {
+    return res.json(serverAssignments.filter((a) => a.courseId === courseId));
+  }
+  res.json(serverAssignments);
+});
+
+app.post('/api/admin/assignments', requireAuth, requireAdmin, (req: AuthRequest, res: Response) => {
+  const { courseId, lessonId, title, description, dueDate, maxPoints, rubric, attachmentUrl } = req.body;
+  if (!courseId || !title) {
+    return res.status(400).json({ error: 'Course and title are required' });
+  }
+  const newAssignment = {
+    id: Date.now(),
+    courseId: Number(courseId),
+    lessonId: lessonId ? Number(lessonId) : null,
+    instructorId: req.user?.uid || 1,
+    instructorName: req.user?.email?.split('@')[0] || 'Mustaqeem Shaikh',
+    title: String(title),
+    description: String(description || ''),
+    dueDate: String(dueDate || ''),
+    maxPoints: Number(maxPoints) || 100,
+    rubric: rubric ? String(rubric) : undefined,
+    attachmentUrl: attachmentUrl || null,
+    createdAt: new Date().toISOString(),
+  };
+  serverAssignments.unshift(newAssignment);
+  res.json(newAssignment);
+});
+
+app.delete('/api/admin/assignments/:id', requireAuth, requireAdmin, (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id);
+  serverAssignments = serverAssignments.filter((a) => a.id !== id);
+  res.json({ success: true, id });
+});
+
+// Quizzes Endpoints
+app.get('/api/quizzes', (req: Request, res: Response) => {
+  const courseId = Number(req.query.courseId);
+  if (courseId) {
+    return res.json(serverQuizzes.filter((q) => q.courseId === courseId));
+  }
+  res.json(serverQuizzes);
+});
+
+app.post('/api/admin/quizzes', requireAuth, requireAdmin, (req: AuthRequest, res: Response) => {
+  const { courseId, lessonId, title, description, timeLimitMinutes, passingScore, badgeAwardName, questions } = req.body;
+  if (!courseId || !title || !Array.isArray(questions) || questions.length === 0) {
+    return res.status(400).json({ error: 'Course, title, and at least one quiz question are required' });
+  }
+  const newQuiz = {
+    id: Date.now(),
+    courseId: Number(courseId),
+    lessonId: lessonId ? Number(lessonId) : null,
+    title: String(title),
+    description: String(description || ''),
+    timeLimitMinutes: Number(timeLimitMinutes) || 10,
+    passingScore: Number(passingScore) || 70,
+    badgeAwardName: badgeAwardName ? String(badgeAwardName) : 'Certified Scholar',
+    questions,
+    createdAt: new Date().toISOString(),
+  };
+  serverQuizzes.unshift(newQuiz);
+  res.json(newQuiz);
+});
+
+app.delete('/api/admin/quizzes/:id', requireAuth, requireAdmin, (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id);
+  serverQuizzes = serverQuizzes.filter((q) => q.id !== id);
+  res.json({ success: true, id });
+});
+
+// Quiz Attempts & Assessment Grading
+app.get('/api/quiz-attempts', (req: Request, res: Response) => {
+  const studentId = Number(req.query.studentId);
+  const courseId = Number(req.query.courseId);
+  let list = [...serverQuizAttempts];
+  if (studentId) list = list.filter((a) => a.studentId === studentId);
+  if (courseId) list = list.filter((a) => a.courseId === courseId);
+  res.json(list);
+});
+
+app.get('/api/admin/quiz-attempts', requireAuth, requireAdmin, (_req: AuthRequest, res: Response) => {
+  res.json(serverQuizAttempts);
+});
+
+app.post('/api/quiz-attempts', requireAuth, (req: AuthRequest, res: Response) => {
+  const { quizId, quizTitle, courseId, studentId, studentName, studentEmail, score, totalPoints, percentage, passed, selectedAnswers, timeSpentSeconds } = req.body;
+  const newAttempt = {
+    id: Date.now(),
+    quizId: Number(quizId),
+    quizTitle: String(quizTitle || 'Quiz Assessment'),
+    courseId: Number(courseId),
+    studentId: Number(studentId),
+    studentName: String(studentName || 'Student'),
+    studentEmail: String(studentEmail || ''),
+    score: Number(score) || 0,
+    totalPoints: Number(totalPoints) || 100,
+    percentage: Number(percentage) || 0,
+    passed: Boolean(passed),
+    selectedAnswers: selectedAnswers || {},
+    timeSpentSeconds: Number(timeSpentSeconds) || 0,
+    submittedAt: new Date().toISOString(),
+    assessmentStatus: passed ? (Number(percentage) >= 90 ? 'distinction' : 'passed') : 'needs_revision',
+  };
+  serverQuizAttempts.unshift(newAttempt);
+  res.json(newAttempt);
+});
+
+app.all('/api/admin/assessments/:attemptId/grade', requireAuth, requireAdmin, (req: AuthRequest, res: Response) => {
+  const attemptId = Number(req.params.attemptId);
+  const { assessmentFeedback, assessmentStatus, adjustedScore } = req.body;
+  const idx = serverQuizAttempts.findIndex((a) => a.id === attemptId);
+  if (idx !== -1) {
+    if (assessmentFeedback !== undefined) serverQuizAttempts[idx].assessmentFeedback = String(assessmentFeedback);
+    if (assessmentStatus !== undefined) serverQuizAttempts[idx].assessmentStatus = assessmentStatus;
+    if (adjustedScore !== undefined) serverQuizAttempts[idx].score = Number(adjustedScore);
+    serverQuizAttempts[idx].assessedBy = req.user?.email?.split('@')[0] || 'Mustaqeem Shaikh';
+    serverQuizAttempts[idx].completedAt = new Date().toISOString();
+    return res.json(serverQuizAttempts[idx]);
+  }
+  res.status(404).json({ error: 'Quiz attempt not found' });
+});
+
 // Admin: Update Founder (Mustaqeem Shaikh) Avatar Image or Reset to "MS"
 app.put('/api/admin/founder-avatar', requireAuth, requireStrictFounderAdmin, async (req: AuthRequest, res) => {
   try {
@@ -1448,7 +1695,11 @@ app.post('/api/admin/lessons', requireAuth, requireAdmin, async (req: AuthReques
 app.put('/api/admin/lessons/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const lessonId = Number(req.params.id);
-    const updated = await updateLesson(lessonId, req.body);
+    const bodyData = { ...req.body };
+    delete bodyData.id;
+    delete bodyData.createdAt;
+    delete bodyData.created_at;
+    const updated = await updateLesson(lessonId, bodyData);
     res.json(updated);
   } catch (error: any) {
     console.error('Failed to update lesson:', error);

@@ -43,6 +43,9 @@ import {
   SyllabusBox,
   HomeworkSubmission,
   HomeworkGradeStatus,
+  HomeworkAssignment,
+  Quiz,
+  QuizAttempt,
   Message,
   Profile,
   Announcement,
@@ -55,8 +58,10 @@ import { InteractiveCalendar } from './InteractiveCalendar.tsx';
 import {
   convertClassTimeToRegion,
   getDetectedUserTimezone,
+  WORLD_TIMEZONES,
 } from '../lib/timezone.ts';
 import { smartApiFetch } from '../lib/fallbackStore.ts';
+import { QuizAssessmentModal } from './QuizAssessmentModal.tsx';
 
 export type ResourceFileType = 'PDF' | 'Doc' | 'Link';
 
@@ -268,6 +273,38 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
   const [hwAttachmentUrl, setHwAttachmentUrl] = useState('');
   const [uploadingHwFile, setUploadingHwFile] = useState(false);
   const [submittingHw, setSubmittingHw] = useState(false);
+
+  // Quizzes & Assigned Homework State
+  const [courseQuizzes, setCourseQuizzes] = useState<Quiz[]>([]);
+  const [courseAssignments, setCourseAssignments] = useState<HomeworkAssignment[]>([]);
+  const [courseAttempts, setCourseAttempts] = useState<QuizAttempt[]>([]);
+  const [activeQuizModal, setActiveQuizModal] = useState<Quiz | null>(null);
+
+  const fetchCourseQuizzesAndAssignments = async () => {
+    try {
+      const [qRes, aRes, attRes] = await Promise.all([
+        smartApiFetch(`/api/quizzes?courseId=${course.id}`),
+        smartApiFetch(`/api/assignments?courseId=${course.id}`),
+        smartApiFetch(`/api/quiz-attempts?courseId=${course.id}`),
+      ]);
+      if (qRes.ok) {
+        const d = await qRes.json();
+        if (Array.isArray(d)) setCourseQuizzes(d);
+      }
+      if (aRes.ok) {
+        const d = await aRes.json();
+        if (Array.isArray(d)) setCourseAssignments(d);
+      }
+      if (attRes.ok) {
+        const d = await attRes.json();
+        if (Array.isArray(d)) setCourseAttempts(d);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchCourseQuizzesAndAssignments();
+  }, [course.id]);
 
   // Faculty Feedback & Grade Status Form State per Homework Submission
   const [openTutorEditorId, setOpenTutorEditorId] = useState<number | null>(null);
@@ -1100,8 +1137,123 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
               )}
             </div>
 
-            {/* 2. HOMEWORK SUBMISSION & FACULTY FEEDBACK / GRADE STATUSES */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* 2. INTERACTIVE COURSE QUIZZES & ASSESSMENTS */}
+            {courseQuizzes.length > 0 && (
+              <div className="rounded-xl academy-surface p-6 border border-teal-500/25 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-display text-base font-bold text-teal-400 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      <span>Interactive Course Quizzes &amp; Milestone Assessments</span>
+                    </h3>
+                    <p className="text-xs academy-text-secondary mt-0.5">
+                      Test your understanding of {course.title} with timed questions, cool transitions, and earn verified certification badges.
+                    </p>
+                  </div>
+                  <span className="text-xs text-amber-300 font-mono font-bold">
+                    {courseQuizzes.length} Assessment{courseQuizzes.length === 1 ? '' : 's'} Available
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {courseQuizzes.map((quiz) => {
+                    const studentAttempt = courseAttempts.find((a) => a.quizId === quiz.id);
+                    return (
+                      <motion.div
+                        key={quiz.id}
+                        whileHover={{ scale: 1.01 }}
+                        className="p-4 rounded-xl academy-elevated border border-slate-800 hover:border-teal-400/50 transition-all flex flex-col justify-between space-y-3 group"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-mono text-slate-400">
+                              {quiz.questions.length} Questions • {quiz.timeLimitMinutes > 0 ? `${quiz.timeLimitMinutes}m` : 'Untimed'}
+                            </span>
+                            <span className="text-teal-400 font-bold">Passing: {quiz.passingScore}%</span>
+                          </div>
+                          <h4 className="font-display text-sm font-bold text-white group-hover:text-teal-300 transition-colors">
+                            {quiz.title}
+                          </h4>
+                          <p className="text-xs academy-text-secondary line-clamp-2">{quiz.description}</p>
+                          {studentAttempt && (
+                            <div className={`p-2 rounded-lg text-xs font-bold flex items-center justify-between ${
+                              studentAttempt.passed
+                                ? 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-300'
+                                : 'bg-amber-950/40 border border-amber-500/40 text-amber-300'
+                            }`}>
+                              <span>Score: {studentAttempt.score}%</span>
+                              <span className="uppercase text-[10px] tracking-wider">
+                                {studentAttempt.passed ? 'PASSED ✓' : 'REVIEW'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveQuizModal(quiz)}
+                          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-teal-400 hover:bg-teal-300 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>{studentAttempt ? 'Retake Assessment' : 'Take Quiz Assessment'}</span>
+                        </button>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 3. ASSIGNED HOMEWORK FROM FACULTY FOR THIS COURSE */}
+            {courseAssignments.length > 0 && (
+              <div className="rounded-xl academy-surface p-6 border border-teal-500/25 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-display text-base font-bold text-white flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-teal-400" />
+                      <span>Assigned Coursework for {course.title}</span>
+                    </h3>
+                    <p className="text-xs academy-text-secondary mt-0.5">
+                      Required submissions and research folios evaluated by {course.instructorName}.
+                    </p>
+                  </div>
+                  <span className="text-xs text-teal-300 font-mono font-bold">
+                    {courseAssignments.length} Assigned
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {courseAssignments.map((asgn) => (
+                    <div key={asgn.id} className="p-4 rounded-xl academy-elevated border border-slate-800 space-y-2 flex flex-col justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-amber-300 font-mono font-bold">Due: {asgn.dueDate}</span>
+                          <span className="text-slate-400">{asgn.maxPoints} pts max</span>
+                        </div>
+                        <h4 className="font-display text-sm font-bold text-white">{asgn.title}</h4>
+                        <p className="text-xs academy-text-secondary line-clamp-3">{asgn.description}</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHwTitle(`Submission: ${asgn.title}`);
+                          const el = document.getElementById('watch-hw-form');
+                          if (el) el.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                        className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-teal-400 hover:text-slate-950 text-xs font-bold text-teal-300 transition-colors"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Submit for this assignment</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 4. HOMEWORK SUBMISSION & FACULTY FEEDBACK / GRADE STATUSES */}
+            <div id="watch-hw-form" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Left 6 Cols: Submit Homework Form */}
               <div className="lg:col-span-5 rounded-xl academy-surface p-6 space-y-4">
                 <h2 className="font-display text-lg font-bold text-teal-400">
@@ -2462,6 +2614,21 @@ export const CourseWatchView: React.FC<CourseWatchViewProps> = ({
           title={activePdfModal.title}
           onClose={() => setActivePdfModal(null)}
           variant="modal"
+        />
+      )}
+
+      {/* Interactive Quiz & Knowledge Assessment Modal with Cool Transitions */}
+      {activeQuizModal && (
+        <QuizAssessmentModal
+          quiz={activeQuizModal}
+          isOpen={Boolean(activeQuizModal)}
+          onClose={() => setActiveQuizModal(null)}
+          currentProfile={currentProfile || null}
+          onCompleted={async (attempt) => {
+            setCourseAttempts((prev) => [attempt, ...prev.filter((a) => a.id !== attempt.id)]);
+            await fetchCourseQuizzesAndAssignments();
+          }}
+          showToast={() => {}}
         />
       )}
     </motion.div>

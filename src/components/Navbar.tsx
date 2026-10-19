@@ -11,6 +11,7 @@ import {
   Mail,
   X,
   Sparkles,
+  BookOpen,
 } from 'lucide-react';
 import { useTheme, ThemeMode } from '../context/ThemeContext.tsx';
 import { useAuth, CreatedEduCredentials } from '../context/AuthContext.tsx';
@@ -24,7 +25,8 @@ export type ActiveView =
   | 'calendar'
   | 'dashboard'
   | 'admin'
-  | 'enroll';
+  | 'enroll'
+  | 'blogs';
 
 interface NavbarProps {
   activeView: ActiveView;
@@ -313,6 +315,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Enroll</span>
           </button>
 
+          <button
+            type="button"
+            onClick={() => onNavigate('blogs')}
+            className={`whitespace-nowrap transition-colors pb-0.5 border-b-2 flex items-center gap-1.5 ${
+              activeView === 'blogs'
+                ? 'border-teal-400 text-teal-400 font-bold'
+                : 'border-transparent academy-text-secondary hover:text-teal-300 font-medium'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5 text-teal-400" />
+            <span>Blogs</span>
+          </button>
+
           {profile?.role === 'admin' ? (
             <button
               type="button"
@@ -376,7 +391,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Mobile Navigation Bar */}
       <div className="flex md:hidden items-center justify-around px-3 py-2 academy-surface border-b text-xs font-medium overflow-x-auto gap-2">
-        {(['home', 'courses', 'faculty', 'calendar', 'dashboard', 'enroll'] as ActiveView[]).map((view) => (
+        {(['home', 'courses', 'faculty', 'calendar', 'dashboard', 'enroll', 'blogs'] as ActiveView[]).map((view) => (
           <button
             key={view}
             type="button"
@@ -385,7 +400,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               activeView === view ? 'text-teal-400 font-semibold' : 'academy-text-secondary'
             }`}
           >
-            {view === 'faculty' ? 'Our Faculty' : view}
+            {view === 'faculty' ? 'Our Faculty' : view === 'blogs' ? 'Student Blogs' : view}
           </button>
         ))}
         {profile?.role === 'admin' ? (
