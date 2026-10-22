@@ -1,11 +1,26 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json' with { type: 'json' };
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const db = getFirestore(
+  app,
+  (firebaseConfig as any).firestoreDatabaseId || undefined
+);
 export const googleAuthProvider = new GoogleAuthProvider();
 googleAuthProvider.setCustomParameters({ prompt: 'select_account' });
+
+// Test Firestore connection on boot
+if (typeof window !== 'undefined') {
+  getDocFromServer(doc(db, '_health', 'connection')).catch((err) => {
+    // Expected on initial setup before collection exists, confirms network reachability
+    if (err?.message?.includes('the client is offline')) {
+      console.warn('Firebase Firestore client offline');
+    }
+  });
+}
 
 export const GOOGLE_OAUTH_CLIENT_ID =
   firebaseConfig.oAuthClientId ||

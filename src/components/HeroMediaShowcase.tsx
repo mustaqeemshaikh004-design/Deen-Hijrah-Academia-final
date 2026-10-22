@@ -203,13 +203,14 @@ export const HeroMediaShowcase: React.FC<HeroMediaShowcaseProps> = ({
 
   const getEmbedUrl = (url: string, autoplay = true, mute = false) => {
     const muteParam = mute ? '&mute=1' : '&mute=0';
-    if (url.includes('youtu.be/')) {
-      const id = url.split('youtu.be/')[1]?.split('?')[0];
+    const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/);
+    if (ytMatch && ytMatch[1]) {
+      const id = ytMatch[1];
       return `https://www.youtube.com/embed/${id}?autoplay=${autoplay ? 1 : 0}${muteParam}&loop=1&playlist=${id}`;
     }
-    if (url.includes('youtube.com/watch?v=')) {
-      const id = url.split('v=')[1]?.split('&')[0];
-      return `https://www.youtube.com/embed/${id}?autoplay=${autoplay ? 1 : 0}${muteParam}&loop=1&playlist=${id}`;
+    const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?([0-9]+)/);
+    if (vimeoMatch && vimeoMatch[1]) {
+      return `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=${autoplay ? 1 : 0}&muted=${mute ? 1 : 0}`;
     }
     return url;
   };

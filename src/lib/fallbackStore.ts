@@ -2143,18 +2143,13 @@ export async function smartApiFetch(
       return res;
     }
 
-    // If deployed on a static host (404/405/502/503/504 or HTML fallback) or if an auth/admin endpoint fails,
-    // handle transparently via the local fallback store so sign-in, Google auth, enrollment and course creation always succeed.
+    // If deployed on a purely static host without backend (HTML fallback, 404, 405, 502/503/504),
+    // fall back to local store. Otherwise, return the real server response so changes save globally.
     if (
       !isJson ||
-      res.status === 401 ||
-      res.status === 403 ||
       res.status === 404 ||
       res.status === 405 ||
-      res.status >= 500 ||
-      url.startsWith('/api/auth/') ||
-      url.startsWith('/api/me') ||
-      url.startsWith('/api/admin/')
+      res.status >= 500
     ) {
       return await handleLocalFallbackRequest(url, options);
     }

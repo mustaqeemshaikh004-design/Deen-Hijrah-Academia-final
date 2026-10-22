@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile in the academy",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID" },
+        "email": { "type": "string", "description": "User email address" },
+        "fullName": { "type": "string", "description": "Full name of the user" },
+        "role": { "type": "string", "enum": ["admin", "instructor", "student"], "description": "Access role" },
+        "title": { "type": "string", "description": "User title or bio tag" },
+        "avatarUrl": { "type": "string", "description": "Profile picture URL" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["uid", "email", "fullName", "role"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Academy course details",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Title of the course" },
+        "slug": { "type": "string", "description": "URL slug" },
+        "description": { "type": "string", "description": "Short description" },
+        "category": { "type": "string", "description": "Course category" },
+        "instructorName": { "type": "string", "description": "Instructor name" },
+        "status": { "type": "string", "enum": ["published", "draft"], "description": "Publication status" },
+        "createdAt": { "type": "string", "description": "Creation date" }
+      },
+      "required": ["title", "slug", "category", "status"]
+    },
+    "Enrollment": {
+      "title": "Enrollment",
+      "description": "Student course enrollment record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "User ID of enrolled student" },
+        "courseId": { "type": "string", "description": "Target course ID" },
+        "status": { "type": "string", "enum": ["active", "completed", "dropped"], "description": "Enrollment state" },
+        "enrolledAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["userId", "courseId", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Individual user profiles"
+    },
+    "/courses/{courseId}": {
+      "schema": "Course",
+      "description": "Academy course catalog"
+    },
+    "/enrollments/{enrollmentId}": {
+      "schema": "Enrollment",
+      "description": "Student enrollment records"
+    }
+  }
+}

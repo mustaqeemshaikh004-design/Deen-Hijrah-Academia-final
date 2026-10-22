@@ -105,6 +105,7 @@ interface AdminPortalProps {
   onUploadFile: (file: File) => Promise<string>;
   onRefreshData: () => Promise<void>;
   onNavigateToStudentDashboard: () => void;
+  onOpenAuthModal?: () => void;
 }
 
 export const AdminPortal: React.FC<AdminPortalProps> = ({
@@ -124,6 +125,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   onUploadFile,
   onRefreshData,
   onNavigateToStudentDashboard,
+  onOpenAuthModal,
 }) => {
   const detectedTz = useMemo(() => getDetectedUserTimezone(), []);
   const isFullAdmin = profile?.role === 'admin';
@@ -181,21 +183,36 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     };
   }, [authFetch]);
 
-  // Strict Scoped Teacher Permissions: Teachers only see & manage their assigned courses
+  // Dedicated Teacher Instructed Courses resolution
+  const teacherInstructedCourses = useMemo(() => {
+    if (!profile) return courses;
+    const cleanProfileName = profile.fullName.trim().toLowerCase();
+    const isFounderOrAdmin =
+      isFullAdmin ||
+      profile.email.toLowerCase() === 'mustaqeemshaikh004@gmail.com' ||
+      profile.email.toLowerCase() === 'mustaqeem.sca@gmail.com' ||
+      profile.email.toLowerCase() === 'faculty@deenhijrah.edu' ||
+      cleanProfileName.includes('mustaqeem') ||
+      cleanProfileName.includes('shaikh');
+
+    const exactMatched = courses.filter(
+      (c) =>
+        c.instructorId === profile.id ||
+        c.instructorName.trim().toLowerCase() === cleanProfileName ||
+        (isFounderOrAdmin &&
+          (c.instructorName.toLowerCase().includes('mustaqeem') ||
+            c.instructorName.toLowerCase().includes('shaikh') ||
+            !c.instructorId))
+    );
+
+    if (exactMatched.length > 0) return exactMatched;
+    return courses;
+  }, [courses, isFullAdmin, profile]);
+
   const managedCourses = useMemo(() => {
     if (!isTeacherMode && isFullAdmin) return courses;
-    if (profile) {
-      const filtered = courses.filter(
-        (c) =>
-          c.instructorId === profile.id ||
-          c.instructorName.trim().toLowerCase() === profile.fullName.trim().toLowerCase()
-      );
-      // If full admin switched to teacher mode and has no courses with their exact name, allow them to view all courses they teach
-      if (filtered.length === 0 && isFullAdmin) return courses;
-      return filtered;
-    }
-    return courses;
-  }, [courses, isFullAdmin, isTeacherMode, profile]);
+    return teacherInstructedCourses;
+  }, [courses, isFullAdmin, isTeacherMode, teacherInstructedCourses]);
 
   const managedCourseIds = useMemo(() => managedCourses.map((c) => c.id), [managedCourses]);
 
@@ -297,6 +314,37 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setCourseSaveError(null);
   };
 
+  const handleStartEditingCourse = (course: Course) => {
+    setEditingCourseId(course.id);
+    setCourseTitle(course.title);
+    setCourseCategory(course.category);
+    setCoursePrice(course.price);
+    setCourseDuration(course.duration);
+    setCourseInstructor(course.instructorName);
+    setCourseLaunchDate(course.launchDate || '');
+    setCourseMaxStudents(course.maxStudents || 25);
+    setCourseInitialEnrolled(course.initialEnrolledCount || 0);
+    setCourseClassDays(course.classDays || 'Saturday & Wednesday');
+    setCourseClassStartTime(course.classStartTime || '14:00');
+    setCourseClassTimezone(course.classTimezone || 'America/New_York');
+    setCourseShortDesc(course.description);
+    setCourseLongDesc(course.longDescription);
+    setCourseSyllabusText(course.syllabusText || '');
+    setCourseSyllabusFileUrl(course.syllabusFileUrl || '');
+    try {
+      const parsed = JSON.parse(course.syllabusBoxes || '[]');
+      setCourseSyllabusBoxes(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setCourseSyllabusBoxes([]);
+    }
+    setCourseThumb(course.thumbnailUrl);
+    setCourseStatus(course.status);
+    setCourseEnrollmentStatus(course.enrollmentStatus || 'open');
+    const existingTags = parseCourseTags(course);
+    setCourseTags(existingTags.length > 0 ? existingTags : ['Open for Enrollment']);
+    setActiveModule('courses');
+  };
+
   // Lesson & Recording Form State
   const [selectedLessonCourseId, setSelectedLessonCourseId] = useState<number>(
     managedCourses[0]?.id || courses[0]?.id || 0
@@ -308,6 +356,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [resolvedLessonVideoUrl, setResolvedLessonVideoUrl] = useState('');
   const [uploadingLessonVideo, setUploadingLessonVideo] = useState(false);
   const [uploadingLessonAttachment, setUploadingLessonAttachment] = useState(false);
+  const [uploadingLessonThumb, setUploadingLessonThumb] = useState(false);
   const [lessonThumb, setLessonThumb] = useState('preset:seerah');
   const [lessonDuration, setLessonDuration] = useState('45:00');
   const [lessonOrder, setLessonOrder] = useState<number>(1);
@@ -657,13 +706,24 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             assignments, view class schedules in your local timezone, and chat directly with your
             tutor in the Student Dashboard.
           </p>
-          <button
-            type="button"
-            onClick={onNavigateToStudentDashboard}
-            className="px-6 py-2.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors"
-          >
-            Return to Student Dashboard
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            {onOpenAuthModal && (
+              <button
+                type="button"
+                onClick={onOpenAuthModal}
+                className="px-6 py-2.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors shadow-sm"
+              >
+                Sign In as Faculty / Teacher
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onNavigateToStudentDashboard}
+              className="px-6 py-2.5 rounded-lg text-xs font-semibold academy-surface hover:text-white transition-colors"
+            >
+              Return to Student Dashboard
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1397,6 +1457,254 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
         {/* Right Main Content Area (9 Columns) */}
         <div className="lg:col-span-9 space-y-6">
+          {/* TEACHER DASHBOARD: COURSES YOU INSTRUCT SHOWCASE */}
+          <section className="rounded-2xl academy-surface p-5 sm:p-6 border border-teal-500/25 space-y-5 shadow-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b academy-divider">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-teal-400/10 text-teal-400">
+                    <GraduationCap className="w-5 h-5" />
+                  </span>
+                  <h2 className="font-display text-base sm:text-lg font-bold text-white">
+                    Courses You Instruct ({teacherInstructedCourses.length})
+                  </h2>
+                </div>
+                <p className="text-xs academy-text-secondary mt-1">
+                  Active academic programs instructed by{' '}
+                  <strong className="text-teal-300 font-semibold">{profile?.fullName || 'Principal Faculty'}</strong>.
+                  Manage syllabi, class recordings, coursework, and review enrolled students.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-3 py-1.5 rounded-lg bg-teal-500/10 border border-teal-500/20 text-xs font-semibold text-teal-300">
+                  {teacherInstructedCourses.reduce(
+                    (acc, c) =>
+                      acc + enrollments.filter((e) => e.courseId === c.id).length,
+                    0
+                  )}{' '}
+                  Enrolled Students
+                </span>
+                <span className="px-3 py-1.5 rounded-lg bg-slate-800 text-xs font-semibold text-slate-300">
+                  {lessons.filter((l) =>
+                    teacherInstructedCourses.some((c) => c.id === l.courseId)
+                  ).length}{' '}
+                  Recordings
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetCourseFormClean();
+                    setActiveModule('courses');
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ New Course</span>
+                </button>
+              </div>
+            </div>
+
+            {teacherInstructedCourses.length === 0 ? (
+              <div className="py-8 text-center space-y-3">
+                <BookOpen className="w-8 h-8 text-slate-500 mx-auto" />
+                <p className="text-xs academy-text-secondary">
+                  No courses are currently assigned to your instructor profile.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetCourseFormClean();
+                    setActiveModule('courses');
+                  }}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 cursor-pointer"
+                >
+                  Create Your First Course
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {teacherInstructedCourses.map((c) => {
+                  const courseEnrolledCount = enrollments.filter(
+                    (e) => e.courseId === c.id
+                  ).length;
+                  const courseLessonsCount = lessons.filter(
+                    (l) => l.courseId === c.id
+                  ).length;
+                  const maxCap = c.maxStudents || 25;
+                  const capPercent = Math.min(
+                    100,
+                    Math.round((courseEnrolledCount / maxCap) * 100)
+                  );
+
+                  return (
+                    <div
+                      key={c.id}
+                      className="rounded-xl academy-elevated border border-slate-800 hover:border-teal-500/40 p-4 space-y-3 flex flex-col justify-between transition-all group shadow-sm"
+                    >
+                      <div className="space-y-3">
+                        {/* Course Thumbnail & Status Banner */}
+                        <div className="relative rounded-lg overflow-hidden aspect-video bg-black/60">
+                          <img
+                            src={resolveThumbnailUrl(c.thumbnailUrl)}
+                            alt={c.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src =
+                                ACADEMY_ASSETS.courseSeerah;
+                            }}
+                          />
+                          <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-black/70 backdrop-blur-md text-teal-300 border border-teal-500/30">
+                              {c.category}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider backdrop-blur-md ${
+                                c.status === 'published'
+                                  ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30'
+                                  : 'bg-amber-950/80 text-amber-300 border border-amber-500/30'
+                              }`}
+                            >
+                              {c.status}
+                            </span>
+                          </div>
+                          <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-black/80 text-amber-300 border border-amber-500/30">
+                            {c.price || 'Free'}
+                          </div>
+                        </div>
+
+                        {/* Title & Description */}
+                        <div>
+                          <h3 className="font-display text-sm font-bold text-white line-clamp-1 group-hover:text-teal-300 transition-colors">
+                            {c.title}
+                          </h3>
+                          <p className="text-[11px] academy-text-secondary line-clamp-2 mt-1">
+                            {c.description}
+                          </p>
+                        </div>
+
+                        {/* Class Timing & Schedule */}
+                        <div className="p-2.5 rounded-lg academy-surface border border-slate-800 space-y-1 text-[11px]">
+                          <div className="flex items-center justify-between">
+                            <span className="academy-text-muted flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-teal-400" />
+                              <span>{c.classDays || 'Flexible Schedule'}</span>
+                            </span>
+                            <span className="font-mono text-teal-300 font-semibold">
+                              {c.classStartTime || '14:00'}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 truncate">
+                            TZ: {c.classTimezone || 'America/New_York'}
+                          </div>
+                        </div>
+
+                        {/* Enrollment Capacity Progress */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="academy-text-secondary flex items-center gap-1">
+                              <Users className="w-3 h-3 text-teal-400" />
+                              <span>Enrolled Students</span>
+                            </span>
+                            <span className="font-mono font-bold text-white">
+                              {courseEnrolledCount} / {maxCap}
+                            </span>
+                          </div>
+                          <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                capPercent >= 90
+                                  ? 'bg-rose-400'
+                                  : capPercent >= 60
+                                  ? 'bg-amber-400'
+                                  : 'bg-teal-400'
+                              }`}
+                              style={{ width: `${capPercent}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Key Count Badges */}
+                        <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                          <div className="p-1.5 rounded bg-slate-900 border border-slate-800 text-center">
+                            <div className="font-mono font-bold text-teal-300">
+                              {courseLessonsCount}
+                            </div>
+                            <div className="text-[10px] text-slate-400">Recordings</div>
+                          </div>
+                          <div className="p-1.5 rounded bg-slate-900 border border-slate-800 text-center">
+                            <div className="font-mono font-bold text-amber-300">
+                              {c.duration || '8 Weeks'}
+                            </div>
+                            <div className="text-[10px] text-slate-400">Duration</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Teacher Quick Action Buttons */}
+                      <div className="pt-2 border-t border-slate-800 space-y-1.5">
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedLessonCourseId(c.id);
+                              setActiveModule('lessons');
+                              showNotice(`Viewing recordings for "${c.title}"`);
+                            }}
+                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-colors cursor-pointer"
+                            title="Upload and manage recordings for this course"
+                          >
+                            <Video className="w-3 h-3" />
+                            <span>Recordings</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditingCourse(c)}
+                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold academy-surface hover:text-white border border-slate-700 hover:border-teal-400 transition-colors cursor-pointer"
+                            title="Edit course syllabus and information"
+                          >
+                            <Edit3 className="w-3 h-3 text-teal-400" />
+                            <span>Syllabus</span>
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHwCourseId(c.id);
+                              setNewQuizCourseId(c.id);
+                              setActiveModule('homework');
+                              setHwStudioTab('assign');
+                              showNotice(`Coursework studio opened for "${c.title}"`);
+                            }}
+                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium academy-surface hover:text-white border border-slate-800 hover:border-slate-700 text-slate-300 cursor-pointer"
+                            title="Assign homework or create quizzes for this course"
+                          >
+                            <FileText className="w-3 h-3 text-amber-400" />
+                            <span>Homework/Quiz</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveModule('teacher_students');
+                              showNotice(`Inspecting students for "${c.title}"`);
+                            }}
+                            className="flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium academy-surface hover:text-white border border-slate-800 hover:border-slate-700 text-slate-300 cursor-pointer"
+                            title="Inspect student enrollments and attendance"
+                          >
+                            <Users className="w-3 h-3 text-teal-400" />
+                            <span>Students ({courseEnrolledCount})</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
           {/* MODULE A: COURSE MANAGER (Syllabus Upload + Boxes, Student Limit, Class Schedule + Timezone) */}
           {activeModule === 'courses' && (
             <div className="space-y-6">
@@ -2577,44 +2885,137 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs academy-text-secondary mb-1">
-                          Recording Thumbnail (Upload Image or URL)
+                    {/* Advanced Recording Thumbnail & Cover Uploader with Live 16:9 Preview */}
+                    <div className="p-4 rounded-xl academy-elevated border border-teal-500/25 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+                          <span>Recording Video Thumbnail / Cover Artwork</span>
                         </label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={lessonThumb}
-                            onChange={(e) => setLessonThumb(e.target.value)}
-                            className="flex-1 px-3 py-2 text-xs rounded-lg academy-elevated"
+                        {lessonThumb && (
+                          <span className="text-[11px] text-teal-300 font-mono">
+                            {lessonThumb.startsWith('preset:')
+                              ? 'Preset Cover'
+                              : lessonThumb.startsWith('data:') || lessonThumb.includes('/uploads/')
+                              ? 'Custom Uploaded'
+                              : 'Custom Image'}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                        {/* Live 16:9 Aspect Ratio Thumbnail Preview Box */}
+                        <div className="md:col-span-5 relative rounded-lg overflow-hidden border border-slate-700 bg-slate-950 aspect-video flex items-center justify-center group shadow-md">
+                          <img
+                            src={resolveThumbnailUrl(lessonThumb || 'preset:seerah')}
+                            alt="Recording Thumbnail Preview"
+                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = ACADEMY_ASSETS.courseSeerah;
+                            }}
                           />
-                          <label className="cursor-pointer flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400">
-                            <Upload className="w-3.5 h-3.5 text-teal-400" />
-                            <span>Upload</span>
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-2.5">
+                            <div className="text-[10px] font-medium text-slate-200 truncate flex items-center gap-1">
+                              <Film className="w-3 h-3 text-teal-400" />
+                              <span>Player Thumbnail Preview</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Controls: Upload Image, Course Cover Copy, URL, and Presets */}
+                        <div className="md:col-span-7 space-y-2.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <label className="cursor-pointer flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-bold bg-teal-400 text-slate-950 hover:bg-teal-300 transition-all shadow-sm">
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>{uploadingLessonThumb ? 'Uploading Image...' : 'Upload Image from Computer'}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                disabled={uploadingLessonThumb}
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  setUploadingLessonThumb(true);
+                                  try {
+                                    const url = await onUploadFile(file);
+                                    setLessonThumb(url);
+                                    showNotice(`Recording cover artwork "${file.name}" uploaded successfully!`);
+                                  } catch (err: any) {
+                                    showNotice(`Thumbnail upload error: ${err.message || 'Could not upload image'}`);
+                                  } finally {
+                                    setUploadingLessonThumb(false);
+                                  }
+                                }}
+                              />
+                            </label>
+                            {courses.find((c) => c.id === activeCourseIdForLessons)?.thumbnailUrl && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const c = courses.find((item) => item.id === activeCourseIdForLessons);
+                                  if (c?.thumbnailUrl) {
+                                    setLessonThumb(c.thumbnailUrl);
+                                    showNotice('Applied course thumbnail as recording cover.');
+                                  }
+                                }}
+                                className="px-3 py-2.5 rounded-lg text-[11px] font-medium academy-surface border border-slate-700 hover:text-white hover:border-teal-400 transition-colors whitespace-nowrap cursor-pointer"
+                                title="Use this course's primary thumbnail"
+                              >
+                                Use Course Cover
+                              </button>
+                            )}
+                          </div>
+
+                          <div>
                             <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => handleImageUpload(e, setLessonThumb)}
+                              type="text"
+                              value={lessonThumb}
+                              onChange={(e) => setLessonThumb(e.target.value)}
+                              placeholder="Or paste custom image link (https://...)"
+                              className="w-full px-3 py-2 text-xs rounded-lg academy-surface border border-slate-800 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-400 font-mono"
                             />
-                          </label>
+                          </div>
+
+                          {/* Preset Buttons */}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                            <span className="text-[10px] uppercase tracking-wider text-slate-400 mr-1">Presets:</span>
+                            {PRESET_THUMBNAILS.map((p) => {
+                              const isSelected = lessonThumb === p.id;
+                              return (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => setLessonThumb(p.id)}
+                                  className={`px-2 py-1 text-[11px] rounded border transition-colors ${
+                                    isSelected
+                                      ? 'border-teal-400 text-teal-300 bg-teal-500/20 font-semibold'
+                                      : 'border-white/10 text-slate-400 hover:text-white hover:bg-white/5'
+                                  }`}
+                                >
+                                  {p.label.split(' ')[0]}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
-                      <div>
-                        <label className="block text-xs academy-text-secondary mb-1">
-                          Lesson Notes / PDF Attachment (Upload File or Link)
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={lessonAttachment}
-                            onChange={(e) => setLessonAttachment(e.target.value)}
-                            placeholder="https://... or upload PDF"
-                            className="flex-1 px-3 py-2 text-xs rounded-lg academy-elevated"
-                          />
-                          <label className="cursor-pointer flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400 whitespace-nowrap">
-                            <Upload className="w-3.5 h-3.5 text-teal-400" />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs academy-text-secondary mb-1">
+                        Lesson Notes / PDF Attachment (Upload File or Link)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={lessonAttachment}
+                          onChange={(e) => setLessonAttachment(e.target.value)}
+                          placeholder="https://... or upload PDF"
+                          className="flex-1 px-3 py-2 text-xs rounded-lg academy-elevated"
+                        />
+                        <label className="cursor-pointer flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium academy-elevated hover:border-teal-400 whitespace-nowrap">
+                          <Upload className="w-3.5 h-3.5 text-teal-400" />
                             <span>
                               {uploadingLessonAttachment ? 'Uploading...' : 'Upload PDF'}
                             </span>
@@ -2660,7 +3061,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           </div>
                         )}
                       </div>
-                    </div>
 
                     <div>
                       <label className="block text-xs academy-text-secondary mb-1">

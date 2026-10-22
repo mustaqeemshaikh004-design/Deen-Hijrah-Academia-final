@@ -28,6 +28,7 @@ export async function getOrCreateProfile(
     const cleanEmail = (email || 'student@deenhijrah.edu').trim().toLowerCase();
     const isFounder =
       cleanEmail === 'mustaqeemshaikh004@gmail.com' ||
+      cleanEmail === 'mustaqeem.sca@gmail.com' ||
       cleanEmail === 'faculty@deenhijrah.edu' ||
       uid === 'founder-mustaqeem-shaikh';
 
@@ -38,6 +39,7 @@ export async function getOrCreateProfile(
         (p) =>
           p.uid === 'founder-mustaqeem-shaikh' ||
           p.email.trim().toLowerCase() === 'mustaqeemshaikh004@gmail.com' ||
+          p.email.trim().toLowerCase() === 'mustaqeem.sca@gmail.com' ||
           p.role === 'admin'
       );
       if (existingFounder) {
@@ -153,11 +155,12 @@ export async function registerEduStudentAccount(
 
     if (
       candidateEmail === 'mustaqeemshaikh004@gmail.com' ||
+      candidateEmail === 'mustaqeem.sca@gmail.com' ||
       candidateEmail === 'faculty@deenhijrah.edu'
     ) {
       return await getOrCreateProfile(
         'founder-mustaqeem-shaikh',
-        'mustaqeemshaikh004@gmail.com',
+        candidateEmail,
         'Mustaqeem Shaikh'
       );
     }
@@ -231,11 +234,12 @@ export async function authenticateAccount(email: string, passwordInput: string) 
     // Founder / Admin check (supports both private email and faculty@deenhijrah.edu alias)
     if (
       cleanEmail === 'mustaqeemshaikh004@gmail.com' ||
+      cleanEmail === 'mustaqeem.sca@gmail.com' ||
       cleanEmail === 'faculty@deenhijrah.edu'
     ) {
       const founder = await getOrCreateProfile(
         'founder-mustaqeem-shaikh',
-        'mustaqeemshaikh004@gmail.com',
+        cleanEmail,
         'Mustaqeem Shaikh'
       );
       return founder;

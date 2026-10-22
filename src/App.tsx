@@ -660,6 +660,7 @@ function AcademyPortalContent() {
                   onUploadFile={uploadMediaFile}
                   onRefreshData={handleRefreshAll}
                   onNavigateToStudentDashboard={() => handleNavigateWithLogo('dashboard')}
+                  onOpenAuthModal={() => openAuthModal('signin')}
                 />
               </motion.div>
             ) : activeView === 'dashboard' ? (
@@ -783,6 +784,7 @@ function AcademyPortalContent() {
                   onFacultyJoined={async (sessionToken, updatedProfile) => {
                     if (sessionToken) {
                       try {
+                        localStorage.setItem('deen_hijrah_session_token', sessionToken);
                         localStorage.setItem('academy_session_token', sessionToken);
                       } catch {}
                     }

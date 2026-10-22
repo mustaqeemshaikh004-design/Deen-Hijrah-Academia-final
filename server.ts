@@ -374,6 +374,7 @@ app.post('/api/auth/google', async (req, res) => {
     const cleanEmail = rawEmail.includes('@') ? rawEmail : `${rawEmail}@gmail.com`;
     const effectiveUid =
       cleanEmail === 'mustaqeemshaikh004@gmail.com' ||
+      cleanEmail === 'mustaqeem.sca@gmail.com' ||
       cleanEmail === 'faculty@deenhijrah.edu'
         ? 'founder-mustaqeem-shaikh'
         : String(uid || '').trim() ||
@@ -1342,6 +1343,48 @@ let serverQuizzes: any[] = [
 
 let serverQuizAttempts: any[] = [];
 
+const ASSIGNMENTS_FILE = path.join(UPLOADS_DIR, 'assignments_store.json');
+
+function loadServerAssignmentsStore() {
+  try {
+    if (fs.existsSync(ASSIGNMENTS_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(ASSIGNMENTS_FILE, 'utf-8'));
+      if (Array.isArray(parsed.assignments) && parsed.assignments.length > 0) {
+        serverAssignments = parsed.assignments;
+      }
+      if (Array.isArray(parsed.quizzes) && parsed.quizzes.length > 0) {
+        serverQuizzes = parsed.quizzes;
+      }
+      if (Array.isArray(parsed.attempts)) {
+        serverQuizAttempts = parsed.attempts;
+      }
+    }
+  } catch (err) {
+    console.warn('Assignments store load notice:', err);
+  }
+}
+
+function persistServerAssignmentsStore() {
+  try {
+    fs.writeFileSync(
+      ASSIGNMENTS_FILE,
+      JSON.stringify(
+        {
+          assignments: serverAssignments,
+          quizzes: serverQuizzes,
+          attempts: serverQuizAttempts,
+        },
+        null,
+        2
+      )
+    );
+  } catch (err) {
+    console.warn('Assignments store persist notice:', err);
+  }
+}
+
+loadServerAssignmentsStore();
+
 // Assignments Endpoints
 app.get('/api/assignments', (req: Request, res: Response) => {
   const courseId = Number(req.query.courseId);
@@ -1371,12 +1414,14 @@ app.post('/api/admin/assignments', requireAuth, requireAdmin, (req: AuthRequest,
     createdAt: new Date().toISOString(),
   };
   serverAssignments.unshift(newAssignment);
+  persistServerAssignmentsStore();
   res.json(newAssignment);
 });
 
 app.delete('/api/admin/assignments/:id', requireAuth, requireAdmin, (req: AuthRequest, res: Response) => {
   const id = Number(req.params.id);
   serverAssignments = serverAssignments.filter((a) => a.id !== id);
+  persistServerAssignmentsStore();
   res.json({ success: true, id });
 });
 
@@ -1407,12 +1452,14 @@ app.post('/api/admin/quizzes', requireAuth, requireAdmin, (req: AuthRequest, res
     createdAt: new Date().toISOString(),
   };
   serverQuizzes.unshift(newQuiz);
+  persistServerAssignmentsStore();
   res.json(newQuiz);
 });
 
 app.delete('/api/admin/quizzes/:id', requireAuth, requireAdmin, (req: AuthRequest, res: Response) => {
   const id = Number(req.params.id);
   serverQuizzes = serverQuizzes.filter((q) => q.id !== id);
+  persistServerAssignmentsStore();
   res.json({ success: true, id });
 });
 
@@ -1450,6 +1497,7 @@ app.post('/api/quiz-attempts', requireAuth, (req: AuthRequest, res: Response) =>
     assessmentStatus: passed ? (Number(percentage) >= 90 ? 'distinction' : 'passed') : 'needs_revision',
   };
   serverQuizAttempts.unshift(newAttempt);
+  persistServerAssignmentsStore();
   res.json(newAttempt);
 });
 
@@ -1463,6 +1511,7 @@ app.all('/api/admin/assessments/:attemptId/grade', requireAuth, requireAdmin, (r
     if (adjustedScore !== undefined) serverQuizAttempts[idx].score = Number(adjustedScore);
     serverQuizAttempts[idx].assessedBy = req.user?.email?.split('@')[0] || 'Mustaqeem Shaikh';
     serverQuizAttempts[idx].completedAt = new Date().toISOString();
+    persistServerAssignmentsStore();
     return res.json(serverQuizAttempts[idx]);
   }
   res.status(404).json({ error: 'Quiz attempt not found' });
@@ -1477,7 +1526,8 @@ app.put('/api/admin/founder-avatar', requireAuth, requireStrictFounderAdmin, asy
       allProfs.find(
         (p) =>
           p.uid === 'founder-mustaqeem-shaikh' ||
-          p.email.toLowerCase() === 'mustaqeemshaikh004@gmail.com'
+          p.email.toLowerCase() === 'mustaqeemshaikh004@gmail.com' ||
+          p.email.toLowerCase() === 'mustaqeem.sca@gmail.com'
       ) || allProfs[0];
 
     if (!founder) {
